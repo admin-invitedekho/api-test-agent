@@ -1,9 +1,0 @@
-{
-  "endpoint": "/comments",
-  "data": {
-    "name": "Analysis Comment",
-    "email": "analyst@example.com",
-    "body": "This post by user has ${array_length(previous_response)} existing comments",
-    "postId": "${second_to_last_response[0].id}"
-  }
-}

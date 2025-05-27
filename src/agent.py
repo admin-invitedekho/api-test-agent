@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- Logging Setup ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
+logging.basicConfig(level=logging.WARNING, format='%(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 # --- End Logging Setup ---
 
@@ -28,8 +28,25 @@ llm = ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0)
 
 tools = [get_api, post_api, put_api, delete_api]
 
-# Create system message that references the usage guide
-system_message = """You are an AI agent that executes BDD scenarios by interacting with APIs. 
+# Load the AI Agent Usage Guide
+def load_usage_guide():
+    """Load the AI Agent Usage Guide content"""
+    guide_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'AI_AGENT_USAGE_GUIDE.md')
+    try:
+        with open(guide_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            # Escape curly braces to prevent template variable conflicts
+            content = content.replace('{', '{{').replace('}', '}}')
+            return content
+    except FileNotFoundError:
+        logger.warning(f"AI_AGENT_USAGE_GUIDE.md not found at {guide_path}")
+        return ""
+
+# Load the usage guide content
+usage_guide_content = load_usage_guide()
+
+# Create system message that includes the full usage guide
+system_message = f"""You are an AI agent that executes BDD scenarios by interacting with APIs. 
 
 You have access to four tools:
 - get_api(endpoint, params=None) - for GET requests
@@ -45,7 +62,10 @@ IMPORTANT:
 3. If a request fails (404, etc.), report the error and stop
 4. Only use the available tools for API testing - do not attempt requests outside of API testing scope
 
-Refer to the AI_AGENT_USAGE_GUIDE.md for detailed parsing instructions and examples."""
+COMPLETE USAGE GUIDE AND INSTRUCTIONS:
+{usage_guide_content}
+
+Follow the guide above exactly for parsing step descriptions and executing API calls."""
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", system_message),
@@ -128,68 +148,5 @@ def run_scenario_step(step_description):
         error_message = f"An unexpected error occurred while processing step: '{step_description}'"
         logger.error(error_message)
         # Log the full traceback for unexpected errors
-        logger.error(f"Exception type: {type(e).__name__}, Message: {str(e)}")
-        logger.error(f"Traceback:\n{traceback.format_exc()}")
+        logger.error(f"Error processing step '{step_description}': {type(e).__name__} - {str(e)}")
         raise AgentProcessingError(f"{error_message}. Original error: {type(e).__name__} - {str(e)}") from e
-
-
-if __name__ == '__main__':
-    logger.info("Starting agent execution examples with error handling.")
-
-    # Example 1: Successful GET request
-    step1_desc = 'Get the user with ID 2 from the endpoint /users/2'
-    logger.info(f"\n--- Example 1: {step1_desc} ---")
-    try:
-        response1 = run_scenario_step(step1_desc)
-        agent_output = response1['agent_response'].get('output') if isinstance(response1['agent_response'], dict) else str(response1['agent_response'])
-        logger.info(f"Example 1 Succeeded. Agent output: {agent_output}")
-        logger.info(f"Tool execution: {response1['tool_execution']}")
-    except AgentProcessingError as e:
-        logger.error(f"Example 1 Failed. AgentProcessingError: {e}")
-    except Exception as e:
-        logger.error(f"Example 1 Failed. Unexpected Exception: {e}\n{traceback.format_exc()}")
-
-    # Example 2: POST request with improved formatting
-    step2_desc = 'POST /posts with JSON data: {"title": "My Test Post via Agent", "body": "This is some test content.", "userId": 5}'
-    logger.info(f"\n--- Example 2: {step2_desc} ---")
-    try:
-        response2 = run_scenario_step(step2_desc)
-        agent_output = response2['agent_response'].get('output') if isinstance(response2['agent_response'], dict) else str(response2['agent_response'])
-        logger.info(f"Example 2 Succeeded. Agent output: {agent_output}")
-        logger.info(f"Tool execution: {response2['tool_execution']}")
-    except AgentProcessingError as e:
-        logger.error(f"Example 2 Failed. AgentProcessingError: {e}")
-    except Exception as e:
-        logger.error(f"Example 2 Failed. Unexpected Exception: {e}\n{traceback.format_exc()}")
-
-    # Example 3: Step designed to potentially cause a tool error (e.g., bad endpoint)
-    step3_desc = 'Get data from a clearly invalid endpoint /nonexistent/endpoint/12345'
-    logger.info(f"\n--- Example 3: {step3_desc} (expecting tool error) ---")
-    try:
-        response3 = run_scenario_step(step3_desc)
-        agent_output = response3['agent_response'].get('output') if isinstance(response3['agent_response'], dict) else str(response3['agent_response'])
-        logger.info(f"Example 3 Succeeded (unexpectedly). Agent output: {agent_output}")
-        logger.info(f"Tool execution: {response3['tool_execution']}")
-    except AgentProcessingError as e:
-        logger.error(f"Example 3 Failed as expected. AgentProcessingError: {e}")
-    except Exception as e:
-        logger.error(f"Example 3 Failed. Unexpected Exception: {e}\n{traceback.format_exc()}")
-
-    # Example 4: Step that might cause the agent to say it cannot proceed
-    step4_desc = "Can you book a flight to Mars for tomorrow?" # A task the agent cannot do with current tools
-    logger.info(f"\n--- Example 4: {step4_desc} (expecting agent inability) ---")
-    try:
-        response4 = run_scenario_step(step4_desc)
-        agent_output = response4['agent_response'].get('output') if isinstance(response4['agent_response'], dict) else str(response4['agent_response'])
-        logger.info(f"Example 4 Succeeded (agent might just say it can't do it, which is a valid response but we test for failure phrases). Agent output: {agent_output}")
-        logger.info(f"Tool execution: {response4['tool_execution']}")
-        # If the agent's output contains a failure phrase, run_scenario_step should have raised an error.
-        # If it didn't, this log indicates the heuristic might need adjustment or the agent's response was too nuanced.
-    except AgentProcessingError as e:
-        logger.error(f"Example 4 Failed as expected (or due to heuristic). AgentProcessingError: {e}")
-    except Exception as e:
-        logger.error(f"Example 4 Failed. Unexpected Exception: {e}\n{traceback.format_exc()}")
-
-    logger.info("\nAgent execution examples complete.")
-    logger.info("Review the console logs for details on successes and failures.")
-    logger.info("If using with Behave, AgentProcessingError should propagate and fail the Behave step.")

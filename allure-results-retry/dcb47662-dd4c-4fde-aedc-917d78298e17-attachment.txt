@@ -1,8 +1,0 @@
-{
-  "endpoint": "/posts",
-  "data": {
-    "title": "User ${previous_response[0].userId} has ${array_length(response)} albums",
-    "body": "Statistics post with album count",
-    "userId": "${previous_response[0].userId}"
-  }
-}

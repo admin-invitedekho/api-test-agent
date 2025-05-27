@@ -1,8 +1,0 @@
-{
-  "endpoint": "/todos/${response.id}",
-  "data": {
-    "title": "Complete project for company",
-    "completed": true,
-    "userId": "${response.userId}"
-  }
-}

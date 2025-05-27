@@ -204,23 +204,3 @@ def delete_api(endpoint: str) -> dict:
         # Store in global context for step definitions
         LAST_TOOL_EXECUTION.update(tool_result)
         return tool_result
-
-if __name__ == '__main__':
-    # Example usage (for direct testing of tools)
-    print("Testing GET API tool:")
-    get_result = get_api.invoke({"endpoint": "/users/1"})
-    print(json.dumps(get_result, indent=2))
-    
-    print("\\nTesting POST API tool:")
-    post_data = {"title": "foo", "body": "bar", "userId": 1}
-    post_result = post_api.invoke({"endpoint": "/posts", "data": post_data})
-    print(json.dumps(post_result, indent=2))
-
-    print("\\nTesting PUT API tool:")
-    put_data = {"id": 1, "title": "foo updated", "body": "bar updated", "userId": 1}
-    put_result = put_api.invoke({"endpoint": "/posts/1", "data": put_data})
-    print(json.dumps(put_result, indent=2))
-
-    print("\\nTesting DELETE API tool:")
-    delete_result = delete_api.invoke({"endpoint": "/posts/1"})
-    print(json.dumps(delete_result, indent=2))

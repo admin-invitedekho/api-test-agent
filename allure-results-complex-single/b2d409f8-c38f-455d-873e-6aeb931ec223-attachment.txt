@@ -1,8 +1,0 @@
-{
-  "endpoint": "/posts",
-  "data": {
-    "title": "My Complex Journey Post",
-    "body": "This post is created by user ${response.id} named ${response.name}",
-    "userId": "${response.id}"
-  }
-}

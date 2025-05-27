@@ -1,24 +1,49 @@
 # AI API Test Agent
 
-This project implements an AI agent that uses Langchain and OpenAI to execute BDD scenarios written in Gherkin. The agent is designed to interact with APIs by calling GET, POST, PUT, and DELETE methods based on the Gherkin steps.
+An intelligent API testing framework that uses AI to interpret natural language test scenarios and execute them automatically.
 
-## Rules
+## Overview
 
-1.  The agent is built using the Langchain library with OpenAI models.
-2.  The programming language is Python.
-3.  Tests are written in BDD (Gherkin) format in `.feature` files.
-4.  Each scenario and its steps from the feature files will be passed to the AI agent to perform actions.
-5.  The agent will have tools to call POST, PUT, GET, and DELETE APIs.
+This project implements an AI-powered agent that:
+- Interprets BDD scenarios written in natural language
+- Automatically determines the appropriate API calls to make
+- Validates responses intelligently
+- Provides concise, actionable feedback
+
+## Key Features
+
+- **Natural Language Testing**: Write tests in plain English
+- **AI-Driven Execution**: Smart interpretation of test intentions
+- **Minimal Logging**: Clean, focused output without redundancy
+- **Flexible Validation**: Intelligent response checking
 
 ## Project Structure
 
 ```
 api-test-agent/
 ├── features/                 # Gherkin feature files
-│   └── example.feature
+│   ├── ai_api_tests.feature # Sample AI-driven tests
+│   └── steps/               # Step definitions
+│       ├── ai_steps.py      # AI-powered step handler
+│       └── api_steps.py     # Compatibility layer
 ├── src/
-│   ├── agent.py              # Main AI agent logic
-│   └── api_tools.py          # Tools for API interactions
-├── requirements.txt          # Python dependencies
-└── README.md                 # This file
+│   ├── agent.py             # Main AI agent logic
+│   ├── api_tools.py         # API interaction tools
+│   ├── ai_step_handler.py   # AI step processing
+│   └── intelligent_validator.py # Smart validation
+├── requirements.txt         # Dependencies
+└── README.md               # This file
 ```
+
+## Quick Start
+
+1. Install dependencies: `pip install -r requirements.txt`
+2. Set up your OpenAI API key in `.env`
+3. Run tests: `behave features/ai_api_tests.feature`
+
+## Philosophy
+
+Less is more. This framework focuses on:
+- Clarity over verbosity
+- Intelligence over rigid rules
+- Simplicity over complexity

@@ -1,2 +1,0 @@
-Step failed: the response status should be 200
-Error: None

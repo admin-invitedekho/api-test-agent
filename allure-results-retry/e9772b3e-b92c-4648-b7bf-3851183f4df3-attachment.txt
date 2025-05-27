@@ -1,8 +1,0 @@
-{
-  "endpoint": "/posts",
-  "data": {
-    "title": "First Parallel Post by ${response.name}",
-    "body": "First post content",
-    "userId": "${response.id}"
-  }
-}

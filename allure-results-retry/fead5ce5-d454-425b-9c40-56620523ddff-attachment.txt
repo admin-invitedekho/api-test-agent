@@ -1,3 +1,0 @@
-{
-  "endpoint": "/photos/${second_to_last_response.id}"
-}

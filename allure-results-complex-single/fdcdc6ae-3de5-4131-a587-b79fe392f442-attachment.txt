@@ -1,3 +1,0 @@
-{
-  "endpoint": "/comments?postId=${response[0].id}"
-}

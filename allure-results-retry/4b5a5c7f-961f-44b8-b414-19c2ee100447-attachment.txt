@@ -1,3 +1,0 @@
-{
-  "endpoint": "/todos?userId=${response.id}&completed=false"
-}
