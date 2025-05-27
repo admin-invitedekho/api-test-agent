@@ -1,0 +1,8 @@
+{
+  "endpoint": "/posts/${previous_response.id}",
+  "data": {
+    "title": "Updated by ${response.name}",
+    "body": "This post was updated by user from ${response.address.city}",
+    "userId": "${response.id}"
+  }
+}

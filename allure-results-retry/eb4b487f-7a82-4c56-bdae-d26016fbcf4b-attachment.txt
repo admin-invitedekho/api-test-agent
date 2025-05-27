@@ -1,0 +1,8 @@
+{
+  "endpoint": "/posts",
+  "data": {
+    "title": "Portfolio Announcement",
+    "body": "Check out my new portfolio album ${previous_response.albumId} with photo ${response.id}",
+    "userId": "${second_to_last_response.userId}"
+  }
+}

@@ -1,0 +1,3 @@
+{
+  "endpoint": "/albums?userId=${response.id}"
+}

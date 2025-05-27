@@ -1,0 +1,8 @@
+{
+  "endpoint": "/todos",
+  "data": {
+    "title": "Conditional todo based on incomplete count: ${array_length(response)}",
+    "completed": false,
+    "userId": "${previous_response.id}"
+  }
+}

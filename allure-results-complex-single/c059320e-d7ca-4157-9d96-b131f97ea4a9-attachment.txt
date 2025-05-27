@@ -1,0 +1,9 @@
+{
+  "endpoint": "/comments",
+  "data": {
+    "name": "First Comment on Complex Post",
+    "email": "commenter@example.com",
+    "body": "This is a comment on post ${response.id}",
+    "postId": "${response.id}"
+  }
+}

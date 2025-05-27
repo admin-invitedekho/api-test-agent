@@ -1,0 +1,3 @@
+{
+  "endpoint": "/users/${response.userId}"
+}

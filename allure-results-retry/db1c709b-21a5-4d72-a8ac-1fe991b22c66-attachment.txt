@@ -1,0 +1,3 @@
+{
+  "endpoint": "/posts?userId=${response.id}"
+}

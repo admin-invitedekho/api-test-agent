@@ -1,0 +1,2 @@
+Step failed: the response should be an array with length greater than 1
+Error: None

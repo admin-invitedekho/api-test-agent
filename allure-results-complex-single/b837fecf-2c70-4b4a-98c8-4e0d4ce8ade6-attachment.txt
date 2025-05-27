@@ -1,0 +1,7 @@
+{
+  "endpoint": "/albums",
+  "data": {
+    "title": "Vacation Photos for ${response.name}",
+    "userId": "${response.id}"
+  }
+}

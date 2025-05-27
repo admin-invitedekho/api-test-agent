@@ -1,0 +1,7 @@
+{
+  "endpoint": "/albums",
+  "data": {
+    "title": "Portfolio for ${response.name} - ${response.website}",
+    "userId": "${response.id}"
+  }
+}

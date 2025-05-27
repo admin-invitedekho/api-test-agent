@@ -1,0 +1,495 @@
+# features/steps/api_steps.py
+import json
+import allure
+import re
+from behave import given, when, then
+from src.agent import run_scenario_step, AgentProcessingError
+
+# Storage for previous responses to enable complex validation chains
+response_history = []
+
+# Helper functions
+def interpolate_variables(json_str, history):
+    """Interpolate variables from response history into JSON string"""
+    if not history:
+        return json_str
+    
+    result = json_str
+    pattern = r'\$\{([^}]+)\}'
+    matches = re.findall(pattern, result)
+    
+    for match in matches:
+        if match.startswith('response.'):
+            field_path = match[9:]  # Remove 'response.'
+            if history:
+                try:
+                    value = get_nested_field(history[-1], field_path)
+                    result = result.replace('${' + match + '}', str(value))
+                except:
+                    pass  # Keep original if interpolation fails
+        elif match.startswith('previous_response'):
+            if len(history) >= 2:
+                try:
+                    if match == 'previous_response':
+                        value = json.dumps(history[-2])
+                    elif match.startswith('previous_response.'):
+                        field_path = match[18:]  # Remove 'previous_response.'
+                        value = get_nested_field(history[-2], field_path)
+                    elif match.startswith('previous_response['):
+                        array_match = re.match(r'previous_response\[(\d+)\](\.(.+))?', match)
+                        if array_match:
+                            index = int(array_match.group(1))
+                            field_path = array_match.group(3)
+                            prev_response = history[-2]
+                            if isinstance(prev_response, list) and index < len(prev_response):
+                                if field_path:
+                                    value = get_nested_field(prev_response[index], field_path)
+                                else:
+                                    value = prev_response[index]
+                            else:
+                                continue
+                    result = result.replace('${' + match + '}', str(value))
+                except:
+                    pass
+        elif match.startswith('array_length('):
+            # Handle array_length() function
+            if 'previous_response' in match and len(history) >= 2:
+                try:
+                    prev_response = history[-2]
+                    if isinstance(prev_response, list):
+                        value = len(prev_response)
+                        result = result.replace('${' + match + '}', str(value))
+                except:
+                    pass
+    
+    return result
+
+def get_json_response(tool_execution):
+    """Extract JSON response from tool execution"""
+    json_response = tool_execution.get('json_response')
+    if json_response is None:
+        raw_body = tool_execution.get('body')
+        if raw_body:
+            try:
+                json_response = json.loads(raw_body)
+            except json.JSONDecodeError:
+                raise AssertionError(f"Response body is not valid JSON. Raw body: '{raw_body}'")
+        else:
+            raise AssertionError("Response body is empty, cannot parse JSON.")
+    return json_response
+
+def get_nested_field(obj, field_path):
+    """Get nested field value using dot notation (e.g., 'user.address.city')"""
+    fields = field_path.split('.')
+    current = obj
+    
+    for field in fields:
+        if isinstance(current, dict):
+            current = current[field]
+        elif isinstance(current, list):
+            try:
+                index = int(field)
+                current = current[index]
+            except (ValueError, IndexError):
+                raise KeyError(f"Cannot access field '{field}' in array")
+        else:
+            raise TypeError(f"Cannot access field '{field}' in {type(current)}")
+    
+    return current
+
+def contains_json_structure(actual, expected):
+    """Check if actual JSON contains the expected structure"""
+    if isinstance(expected, dict):
+        if not isinstance(actual, dict):
+            return False
+        for key, value in expected.items():
+            if key not in actual:
+                return False
+            if not contains_json_structure(actual[key], value):
+                return False
+        return True
+    elif isinstance(expected, list):
+        if not isinstance(actual, list):
+            return False
+        if len(expected) == 0:
+            return True
+        for expected_item in expected:
+            found = False
+            for actual_item in actual:
+                if contains_json_structure(actual_item, expected_item):
+                    found = True
+                    break
+            if not found:
+                return False
+        return True
+    else:
+        return actual == expected
+
+# GIVEN step definitions
+@given('the API base URL is "{base_url}"')
+def step_given_api_base_url(context, base_url):
+    context.api_base_url = base_url
+    global response_history
+    response_history = []
+
+@given('the API endpoint "{endpoint}"')
+def step_given_api_endpoint(context, endpoint):
+    context.api_endpoint = endpoint
+
+@given('the request body is')
+def step_given_request_body(context):
+    context.request_body = context.text
+
+# WHEN step definitions
+@when('I execute API request "{tool_name}" with parameters')
+def step_when_execute_api_request(context, tool_name):
+    """Execute API request with JSON parameters, supporting variable interpolation"""
+    context.response = None
+    context.tool_execution = None
+    context.step_error = None
+    
+    try:
+        parameters_json = context.text.strip()
+        interpolated_json = interpolate_variables(parameters_json, response_history)
+        step_description = f"Execute {tool_name} with parameters: {interpolated_json}"
+        
+        result = run_scenario_step(step_description)
+        context.response = result['agent_response']
+        context.tool_execution = result['tool_execution']
+        
+        # Store response in history
+        if context.tool_execution and context.tool_execution.get('json_response'):
+            response_history.append(context.tool_execution['json_response'])
+        elif context.tool_execution and context.tool_execution.get('body'):
+            try:
+                parsed_body = json.loads(context.tool_execution['body'])
+                response_history.append(parsed_body)
+            except json.JSONDecodeError:
+                response_history.append({'raw_body': context.tool_execution['body']})
+        
+        # Allure attachments
+        allure.attach(str(context.response), name="Raw Agent Response", attachment_type=allure.attachment_type.TEXT)
+        allure.attach(interpolated_json, name="Interpolated Parameters", attachment_type=allure.attachment_type.JSON)
+        
+        if context.tool_execution and context.tool_execution.get('tool_name'):
+            allure.attach(str(context.tool_execution), name="Tool Execution Details", attachment_type=allure.attachment_type.JSON)
+            
+            if context.tool_execution.get('curl_command'):
+                allure.attach(context.tool_execution['curl_command'], name="cURL Command", attachment_type=allure.attachment_type.TEXT)
+            
+            if context.tool_execution.get('status_code') is not None:
+                allure.attach(str(context.tool_execution['status_code']), name="API Status Code", attachment_type=allure.attachment_type.TEXT)
+            
+            if context.tool_execution.get('body') is not None:
+                try:
+                    pretty_body = json.dumps(json.loads(context.tool_execution['body']), indent=2)
+                    allure.attach(pretty_body, name="API Response Body (Formatted)", attachment_type=allure.attachment_type.JSON)
+                except (json.JSONDecodeError, TypeError):
+                    allure.attach(str(context.tool_execution['body']), name="API Response Body (Raw)", attachment_type=allure.attachment_type.TEXT)
+
+    except AgentProcessingError as e:
+        context.step_error = e
+        allure.attach(str(e), name="Agent Processing Error", attachment_type=allure.attachment_type.TEXT)
+        raise
+    except Exception as e:
+        context.step_error = e
+        allure.attach(str(e), name="Unexpected Step Execution Error", attachment_type=allure.attachment_type.TEXT)
+        raise
+
+@when('I send a {method} request')
+def step_when_send_request(context, method):
+    """Legacy step definition for backward compatibility"""
+    context.response = None
+    context.tool_execution = None
+    context.step_error = None
+    try:
+        if method.upper() == 'POST':
+            if hasattr(context, 'request_body') and context.request_body:
+                request_body = context.request_body.strip()
+                step_description = f"POST {context.api_endpoint} with JSON data: {request_body}"
+            else:
+                step_description = f"POST {context.api_endpoint}"
+        elif method.upper() == 'PUT':
+            if hasattr(context, 'request_body') and context.request_body:
+                request_body = context.request_body.strip()
+                step_description = f"PUT {context.api_endpoint} with JSON data: {request_body}"
+            else:
+                step_description = f"PUT {context.api_endpoint}"
+        elif method.upper() == 'DELETE':
+            step_description = f"DELETE {context.api_endpoint}"
+        elif method.upper() == 'GET':
+            step_description = f"GET {context.api_endpoint}"
+        else:
+            raise ValueError(f"Unsupported HTTP method: {method}")
+
+        result = run_scenario_step(step_description)
+        context.response = result['agent_response']
+        context.tool_execution = result['tool_execution']
+
+        allure.attach(str(context.response), name="Raw Agent Response", attachment_type=allure.attachment_type.TEXT)
+        
+        if context.tool_execution and context.tool_execution.get('tool_name'):
+            allure.attach(str(context.tool_execution), name="Tool Execution Details", attachment_type=allure.attachment_type.JSON)
+
+    except AgentProcessingError as e:
+        context.step_error = e
+        allure.attach(str(e), name="Agent Processing Error", attachment_type=allure.attachment_type.TEXT)
+        raise
+    except Exception as e:
+        context.step_error = e
+        allure.attach(str(e), name="Unexpected Step Execution Error", attachment_type=allure.attachment_type.TEXT)
+        raise
+
+# THEN step definitions - Status Code
+@then('the response status should be {status_code:d}')
+@then('the response status code should be {status_code:d}')
+@allure.step("Assert API response status code is {status_code}")
+def step_response_status_should_be(context, status_code):
+    if context.step_error:
+        allure.attach(f"Skipping status code assertion due to previous error: {context.step_error}", 
+                      name="Assertion Skipped", attachment_type=allure.attachment_type.TEXT)
+        assert False, f"Step failed prior to status code assertion: {context.step_error}"
+
+    assert context.tool_execution and context.tool_execution.get('tool_name'), "No tool execution found for status code check."
+    actual_status_code = context.tool_execution.get('status_code')
+    allure.attach(str(actual_status_code), name="Actual Status Code", attachment_type=allure.attachment_type.TEXT)
+    allure.attach(str(status_code), name="Expected Status Code", attachment_type=allure.attachment_type.TEXT)
+    assert actual_status_code == status_code, \
+        f"Expected status code {status_code}, but got {actual_status_code}. Tool output: {context.tool_execution}"
+
+# THEN step definitions - JSON Structure
+@then('the response should contain')
+@allure.step("Assert API response contains specific JSON structure")
+def step_response_should_contain_json(context):
+    if context.step_error:
+        assert False, f"Step failed prior to JSON structure assertion: {context.step_error}"
+
+    assert context.tool_execution and context.tool_execution.get('tool_name'), "No tool execution found for JSON structure check."
+    
+    expected_json_str = context.text.strip()
+    
+    try:
+        expected_json = json.loads(expected_json_str)
+    except json.JSONDecodeError as e:
+        assert False, f"Invalid expected JSON string provided: {expected_json_str}. Error: {e}"
+
+    actual_json_response = get_json_response(context.tool_execution)
+    
+    allure.attach(json.dumps(actual_json_response, indent=2), name="Actual JSON Response", attachment_type=allure.attachment_type.JSON)
+    allure.attach(json.dumps(expected_json, indent=2), name="Expected JSON Structure", attachment_type=allure.attachment_type.JSON)
+    
+    assert contains_json_structure(actual_json_response, expected_json), \
+        f"Expected JSON structure {expected_json} not found in actual response {actual_json_response}"
+
+@then('the response should contain "{expected_content}"')
+@allure.step("Assert API response body contains '{expected_content}'")
+def step_response_should_contain_text(context, expected_content):
+    if context.step_error:
+        assert False, f"Step failed prior to body content assertion: {context.step_error}"
+
+    assert context.tool_execution and context.tool_execution.get('tool_name'), "No tool execution found for body check."
+    response_body = str(context.tool_execution.get('body', ''))
+    allure.attach(response_body, name="Actual Response Body", attachment_type=allure.attachment_type.TEXT)
+    allure.attach(expected_content, name="Expected Text", attachment_type=allure.attachment_type.TEXT)
+    assert expected_content in response_body, \
+        f"Expected text '{expected_content}' not found in response body. Body: '{response_body}'"
+
+# THEN step definitions - Field Validation
+@then('the response should contain field "{field_path}"')
+@allure.step("Assert field '{field_path}' exists")
+def step_response_contains_field(context, field_path):
+    """Validate that a specific field exists in the response"""
+    if context.step_error:
+        assert False, f"Step failed prior to field validation: {context.step_error}"
+
+    assert context.tool_execution and context.tool_execution.get('tool_name'), "No tool execution found for field check."
+    
+    actual_json_response = get_json_response(context.tool_execution)
+    
+    try:
+        field_value = get_nested_field(actual_json_response, field_path)
+        allure.attach(str(field_value), name=f"Field '{field_path}' Value", attachment_type=allure.attachment_type.TEXT)
+        assert field_value is not None, f"Field '{field_path}' exists but is None"
+    except (KeyError, TypeError, IndexError):
+        allure.attach(json.dumps(actual_json_response, indent=2), name="Response for Field Check", attachment_type=allure.attachment_type.JSON)
+        assert False, f"Field '{field_path}' not found in response: {actual_json_response}"
+
+@then('the response should contain field "{field_path}" with numeric value')
+@allure.step("Assert field '{field_path}' has numeric value")
+def step_response_field_numeric(context, field_path):
+    """Validate that a specific field contains a numeric value"""
+    # First check the field exists
+    step_response_contains_field(context, field_path)
+    
+    actual_json_response = get_json_response(context.tool_execution)
+    field_value = get_nested_field(actual_json_response, field_path)
+    
+    assert isinstance(field_value, (int, float)), \
+        f"Field '{field_path}' expected to be numeric, but got {type(field_value)}: {field_value}"
+
+@then('the response should contain field "{field_path}" with value "{expected_value}"')
+@allure.step("Assert field '{field_path}' has value '{expected_value}'")
+def step_response_field_with_value(context, field_path, expected_value):
+    """Validate that a specific field has the expected value"""
+    # First check the field exists
+    step_response_contains_field(context, field_path)
+    
+    actual_json_response = get_json_response(context.tool_execution)
+    field_value = get_nested_field(actual_json_response, field_path)
+    
+    allure.attach(str(field_value), name=f"Actual Field '{field_path}' Value", attachment_type=allure.attachment_type.TEXT)
+    allure.attach(expected_value, name=f"Expected Field '{field_path}' Value", attachment_type=allure.attachment_type.TEXT)
+    
+    assert str(field_value) == expected_value, \
+        f"Field '{field_path}' expected '{expected_value}', but got '{field_value}'"
+
+@then('the response field "{field_path}" should equal the previous response field "{prev_field_path}"')
+@allure.step("Assert field '{field_path}' equals previous response field '{prev_field_path}'")
+def step_response_field_equals_previous(context, field_path, prev_field_path):
+    if context.step_error:
+        assert False, f"Step failed prior to field validation: {context.step_error}"
+
+    assert context.tool_execution and context.tool_execution.get('tool_name'), "No tool execution found for field check."
+    assert len(response_history) >= 2, "Need at least 2 responses in history for comparison"
+    
+    current_response = get_json_response(context.tool_execution)
+    previous_response = response_history[-2]
+    
+    current_value = get_nested_field(current_response, field_path)
+    previous_value = get_nested_field(previous_response, prev_field_path)
+    
+    allure.attach(str(current_value), name=f"Current Field '{field_path}' Value", attachment_type=allure.attachment_type.TEXT)
+    allure.attach(str(previous_value), name=f"Previous Field '{prev_field_path}' Value", attachment_type=allure.attachment_type.TEXT)
+    
+    assert current_value == previous_value, \
+        f"Current field '{field_path}' ({current_value}) does not equal previous field '{prev_field_path}' ({previous_value})"
+
+@then('the response field "{field_path}" should be {expected_bool}')
+@allure.step("Assert field '{field_path}' is {expected_bool}")
+def step_response_field_boolean(context, field_path, expected_bool):
+    if context.step_error:
+        assert False, f"Step failed prior to field validation: {context.step_error}"
+
+    assert context.tool_execution and context.tool_execution.get('tool_name'), "No tool execution found for field check."
+    
+    actual_json_response = get_json_response(context.tool_execution)
+    field_value = get_nested_field(actual_json_response, field_path)
+    
+    expected_value = expected_bool.lower() == 'true'
+    
+    allure.attach(str(field_value), name=f"Field '{field_path}' Value", attachment_type=allure.attachment_type.TEXT)
+    allure.attach(str(expected_value), name=f"Expected Boolean Value", attachment_type=allure.attachment_type.TEXT)
+    
+    assert field_value == expected_value, \
+        f"Field '{field_path}' expected {expected_value}, but got {field_value}"
+
+@then('the response field "{field_path}" should contain "{expected_text}"')
+@allure.step("Assert field '{field_path}' contains '{expected_text}'")
+def step_response_field_contains(context, field_path, expected_text):
+    if context.step_error:
+        assert False, f"Step failed prior to field validation: {context.step_error}"
+
+    assert context.tool_execution and context.tool_execution.get('tool_name'), "No tool execution found for field check."
+    
+    actual_json_response = get_json_response(context.tool_execution)
+    field_value = str(get_nested_field(actual_json_response, field_path))
+    
+    allure.attach(field_value, name=f"Field '{field_path}' Value", attachment_type=allure.attachment_type.TEXT)
+    allure.attach(expected_text, name="Expected Text", attachment_type=allure.attachment_type.TEXT)
+    
+    assert expected_text in field_value, \
+        f"Field '{field_path}' ('{field_value}') does not contain expected text '{expected_text}'"
+
+# THEN step definitions - Array Validation
+@then('the response should be an array')
+@allure.step("Assert response is an array")
+def step_response_is_array(context):
+    if context.step_error:
+        assert False, f"Step failed prior to array validation: {context.step_error}"
+
+    assert context.tool_execution and context.tool_execution.get('tool_name'), "No tool execution found for array check."
+    
+    actual_json_response = get_json_response(context.tool_execution)
+    
+    assert isinstance(actual_json_response, list), \
+        f"Expected response to be an array, but got {type(actual_json_response)}: {actual_json_response}"
+    
+    allure.attach(str(len(actual_json_response)), name="Array Length", attachment_type=allure.attachment_type.TEXT)
+
+@then('the response should be an array with length greater than {min_length:d}')
+@allure.step("Assert response is array with length > {min_length}")
+def step_response_array_min_length(context, min_length):
+    if context.step_error:
+        assert False, f"Step failed prior to array validation: {context.step_error}"
+
+    assert context.tool_execution and context.tool_execution.get('tool_name'), "No tool execution found for array check."
+    
+    actual_json_response = get_json_response(context.tool_execution)
+    
+    assert isinstance(actual_json_response, list), \
+        f"Expected response to be an array, but got {type(actual_json_response)}"
+    
+    actual_length = len(actual_json_response)
+    allure.attach(str(actual_length), name="Array Length", attachment_type=allure.attachment_type.TEXT)
+    
+    assert actual_length > min_length, \
+        f"Expected array length > {min_length}, but got {actual_length}"
+
+# THEN step definitions - Legacy and Error Handling
+@then('the API response body should be the JSON {expected_json_str}')
+@allure.step("Assert API response body is JSON: {expected_json_str}")
+def step_legacy_json_response(context, expected_json_str):
+    if context.step_error:
+        assert False, f"Step failed prior to JSON body assertion: {context.step_error}"
+
+    assert context.tool_execution and context.tool_execution.get('tool_name'), "No tool execution found for JSON body check."
+    
+    try:
+        expected_json = json.loads(expected_json_str)
+    except json.JSONDecodeError as e:
+        assert False, f"Invalid expected JSON string provided: {expected_json_str}. Error: {e}"
+
+    actual_json_response = get_json_response(context.tool_execution)
+    
+    allure.attach(json.dumps(actual_json_response, indent=2), name="Actual JSON Response", attachment_type=allure.attachment_type.JSON)
+    allure.attach(json.dumps(expected_json, indent=2), name="Expected JSON", attachment_type=allure.attachment_type.JSON)
+    
+    assert actual_json_response == expected_json, \
+        f"Expected JSON response {expected_json}, but got {actual_json_response}."
+
+@then('the step should fail with a message containing "{expected_error_message_part}"')
+@allure.step("Assert step failed with message containing '{expected_error_message_part}'")
+def step_should_fail_with_message(context, expected_error_message_part):
+    assert context.step_error is not None, "Step was expected to fail, but it did not."
+    error_message = str(context.step_error)
+    allure.attach(error_message, name="Actual Error Message", attachment_type=allure.attachment_type.TEXT)
+    allure.attach(expected_error_message_part, name="Expected Error Message Part", attachment_type=allure.attachment_type.TEXT)
+    assert expected_error_message_part in error_message, \
+        f"Step failed, but error message '{error_message}' did not contain expected part '{expected_error_message_part}'."
+
+@then('the agent output should indicate it cannot perform the action')
+@allure.step("Assert agent output indicates inability to perform action")
+def step_agent_cannot_perform(context):
+    if context.step_error:
+        allure.attach(f"Step failed as expected with AgentProcessingError: {context.step_error}", 
+                      name="Failure Confirmation", attachment_type=allure.attachment_type.TEXT)
+        assert isinstance(context.step_error, AgentProcessingError), \
+            f"Expected AgentProcessingError due to agent inability, but got {type(context.step_error)}"
+        return
+
+    assert context.response and 'output' in context.response, \
+        "No agent output found to check for inability message."
+    
+    agent_final_output = str(context.response['output']).lower()
+    allure.attach(agent_final_output, name="Agent Final Output for Inability Check", attachment_type=allure.attachment_type.TEXT)
+    
+    inability_phrases = ["i am unable to", "i cannot", "i do not have the tools to", "i can't help with that"]
+    
+    can_perform_action = True
+    for phrase in inability_phrases:
+        if phrase in agent_final_output:
+            can_perform_action = False
+            break
+    
+    assert not can_perform_action, \
+        f"Agent output '{agent_final_output}' did not clearly indicate inability to perform the action. Expected one of {inability_phrases}."

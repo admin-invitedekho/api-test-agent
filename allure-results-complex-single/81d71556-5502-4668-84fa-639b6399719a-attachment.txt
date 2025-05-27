@@ -1,0 +1,8 @@
+{
+  "endpoint": "/posts",
+  "data": {
+    "title": "Recovery Post for ${response.name}",
+    "body": "This post was created after handling user 999 error",
+    "userId": "${response.id}"
+  }
+}

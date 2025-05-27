@@ -1,0 +1,8 @@
+{
+  "endpoint": "/posts",
+  "data": {
+    "title": "Second Parallel Post by same user",
+    "body": "Second post content",
+    "userId": "${previous_response.userId}"
+  }
+}
