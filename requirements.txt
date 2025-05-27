@@ -1,0 +1,7 @@
+langchain
+openai
+langchain-openai
+python-dotenv
+requests
+behave
+allure-behave
