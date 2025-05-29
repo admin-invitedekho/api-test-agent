@@ -3,9 +3,6 @@ Feature: InviteDeKho Login API Testing
   I want to test the InviteDeKho authentication system
   So that I can ensure secure and reliable user login functionality
 
-  Background:
-    Given the InviteDeKho API is available at https://api.stage.invitedekho.com
-
   Scenario: Successful login with valid credentials
     When I login to InviteDeKho with email "admin@invitedekho.com" and password "Test@123456"
     Then I should receive a successful authentication response

@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- Logging Setup ---
-logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
+logging.basicConfig(level=logging.ERROR, format='%(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Set specific loggers to ERROR level to reduce noise
@@ -124,6 +124,24 @@ CRITICAL TOOL USAGE RULES:
 6. If a request fails (404, etc.), report the error and stop
 7. Only use the available tools for API testing
 
+CRITICAL STEP TYPE RULES:
+- "Given" steps: Acknowledge setup, usually no API calls
+- "When" steps: Make API calls using tools (post_api, get_api, etc.)
+- "Then" and "And" steps: EXAMINE PREVIOUS RESPONSES - DO NOT make new API calls
+
+ASSERTION STEP HANDLING:
+For steps starting with "Then" or "And" (like "Then I should receive..." or "And the error should..."):
+- DO NOT call post_api, get_api, put_api, or delete_api
+- Instead, examine the LAST API call result from tool execution
+- Check status codes, response data, error messages from previous calls
+- Report whether the assertion passes or fails based on that data
+
+CRITICAL: If a step contains these phrases, DO NOT use any tools:
+- "should receive", "should contain", "should indicate", "should be", "should have"
+- "the response should", "the error should", "the token should"
+- "extract from the response", "verify", "check", "validate"
+Instead, analyze previous API responses and provide verification results.
+
 CRITICAL LOGIN OPERATIONS RULE:
 For ANY login steps (like "When I try to login with email... and password..."):
 - The API contract specifies: Method: POST for /login endpoint
@@ -203,6 +221,79 @@ def run_scenario_step(step_description):
     Falls back to text parsing if tool calling is not available.
     """
     logger.info(f"Attempting to execute BDD step: '{step_description}'")
+    
+    # Pre-process assertion steps to prevent unnecessary tool calls
+    step_lower = step_description.lower().strip()
+    assertion_keywords = [
+        "should receive", "should contain", "should indicate", "should be", "should have",
+        "the response should", "the error should", "the token should",
+        "extract from the response", "extract the", "verify", "check", "validate"
+    ]
+    
+    is_assertion_step = (
+        step_lower.startswith(("then ", "and ")) or
+        any(keyword in step_lower for keyword in assertion_keywords)
+    )
+    
+    if is_assertion_step:
+        # Handle assertion steps by examining previous responses
+        from api_tools import LAST_TOOL_EXECUTION
+        
+        if LAST_TOOL_EXECUTION.get('status_code') is not None:
+            status_code = LAST_TOOL_EXECUTION.get('status_code')
+            response_data = LAST_TOOL_EXECUTION.get('json_response')
+            error = LAST_TOOL_EXECUTION.get('error')
+            
+            # Generate assertion response based on previous API call
+            if "should receive a successful" in step_lower or "successful authentication" in step_lower:
+                if status_code == 200 and response_data:
+                    assertion_response = f"✅ Assertion PASSED: The previous API call was successful (Status: {status_code}). Response contains the expected data."
+                else:
+                    assertion_response = f"❌ Assertion FAILED: Expected successful response but got Status: {status_code}, Error: {error}"
+            
+            elif "should contain" in step_lower and "jwt token" in step_lower:
+                if response_data and 'jwtToken' in response_data:
+                    token = response_data['jwtToken']
+                    assertion_response = f"✅ Assertion PASSED: Response contains valid JWT token: {token[:50]}..."
+                else:
+                    assertion_response = f"❌ Assertion FAILED: No JWT token found in response. Response: {response_data}"
+            
+            elif "token should be properly formatted" in step_lower:
+                if response_data and 'jwtToken' in response_data:
+                    token = response_data['jwtToken']
+                    # JWT tokens have 3 parts separated by dots
+                    if token and len(token.split('.')) == 3:
+                        assertion_response = f"✅ Assertion PASSED: JWT token is properly formatted with 3 parts: {token[:50]}..."
+                    else:
+                        assertion_response = f"❌ Assertion FAILED: JWT token format is invalid: {token}"
+                else:
+                    assertion_response = f"❌ Assertion FAILED: No JWT token to validate. Response: {response_data}"
+            
+            elif "should receive an authentication error" in step_lower or "error response" in step_lower:
+                if status_code >= 400:
+                    assertion_response = f"✅ Assertion PASSED: Received expected error response (Status: {status_code}). Error: {response_data or error}"
+                else:
+                    assertion_response = f"❌ Assertion FAILED: Expected error response but got Status: {status_code}"
+                    
+            elif "should indicate invalid credentials" in step_lower:
+                if status_code >= 400 and (error or (response_data and not response_data.get('success', True))):
+                    assertion_response = f"✅ Assertion PASSED: Response indicates authentication failure as expected."
+                else:
+                    assertion_response = f"❌ Assertion FAILED: Expected invalid credentials error but response indicates success."
+            
+            else:
+                # Generic assertion handling
+                assertion_response = f"Assertion step examined. Previous API call: Status {status_code}, Response: {response_data}, Error: {error}"
+            
+            return {
+                'agent_response': {'output': assertion_response},
+                'tool_execution': dict(LAST_TOOL_EXECUTION)
+            }
+        else:
+            return {
+                'agent_response': {'output': "❌ Assertion FAILED: No previous API call found to verify against."},
+                'tool_execution': {}
+            }
     
     # Clear the global tool execution before running
     from api_tools import LAST_TOOL_EXECUTION

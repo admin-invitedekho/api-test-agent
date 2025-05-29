@@ -482,34 +482,142 @@ post_api(endpoint="https://api.stage.invitedekho.com/login")
 
 ## ⚠️ CRITICAL: Step Type Understanding
 
-**IMPORTANT**: Different step types require different actions.
+**MANDATORY RULE**: Different step types require completely different actions.
 
-### Step Classification:
+### Step Classification and Actions:
 
-1. **"Given" steps** - Setup/Context (acknowledge only, no API calls usually)
-2. **"When" steps** - Actions (make API calls)
-3. **"Then" steps** - Assertions (check previous responses, do NOT make new API calls)
+#### 1. **"Given" Steps** - Setup/Context
 
-### "Then" Step Handling:
+- **Purpose**: Establish test context and preconditions
+- **Action**: Acknowledge setup, usually NO API calls
+- **Examples**:
+  - `"Given the API is available at [URL]"` → Acknowledge only
+  - `"Given the system is ready"` → Acknowledge only
 
-For assertion steps like `"Then I should receive an authentication error response"`:
+#### 2. **"When" Steps** - Actions
 
-**CORRECT Action**:
+- **Purpose**: Perform the actual operation being tested
+- **Action**: Make API calls using appropriate tools
+- **Examples**:
+  - `"When I login with email... and password..."` → Use post_api
+  - `"When I try to login with invalid..."` → Use post_api
+  - `"When I successfully login with..."` → Use post_api
 
-- Check the PREVIOUS API call result
-- Examine status code and response data
-- Report if the assertion passes or fails
+#### 3. **"Then" Steps** - Assertions
 
-**WRONG Action**:
+- **Purpose**: Verify the results of previous "When" actions
+- **Action**: **EXAMINE PREVIOUS RESPONSES** - DO NOT make new API calls
+- **Examples**:
+  - `"Then I should receive an authentication error response"` → Check previous API response
+  - `"Then I should receive a successful authentication response"` → Check previous API response
+  - `"Then the system should handle..."` → Analyze previous response
 
-- Making a new API call
-- Calling post_api, get_api, etc.
+#### 4. **"And" Steps** - Additional Assertions
 
-**Example "Then" Step Response**:
+- **Purpose**: Additional verification of previous actions
+- **Action**: **EXAMINE PREVIOUS RESPONSES** - DO NOT make new API calls
+- **Examples**:
+  - `"And the error should indicate invalid credentials"` → Check previous error message
+  - `"And the response should contain a valid JWT token"` → Check previous response data
+  - `"And I extract the JWT token from the response"` → Extract from previous response
+
+### 🚨 **CRITICAL RULE FOR ASSERTION STEPS**
+
+**For ALL "Then" and "And" steps:**
+
+✅ **CORRECT Action**:
 
 ```
-"Based on the previous login attempt, the response was:
-- Status Code: 400
-- Error Message: 'Request method GET is not supported'
-- This indicates an authentication error response as expected."
+1. Look at the LAST API call that was made
+2. Examine its status code, response body, and error messages
+3. Determine if the assertion passes or fails based on that data
+4. Provide a clear summary of the verification result
 ```
+
+❌ **WRONG Action**:
+
+```
+1. Making a new API call with post_api, get_api, etc.
+2. Calling any tool that makes HTTP requests
+3. Ignoring previous response data
+```
+
+### **Detailed Examples:**
+
+#### Example 1: Authentication Error Assertion
+
+**Previous Step**: `When I try to login with invalid email "wrong@email.com" and password "Test@123456"`
+**Previous Response**: `Status: 400, Body: {"success": false, "message": "No value present"}`
+
+**Assertion Step**: `"Then I should receive an authentication error response"`
+
+**CORRECT Response**:
+
+```
+"Based on the previous login attempt:
+- Status Code: 400 (indicates client error)
+- Response: {"success": false, "message": "No value present"}
+- This confirms an authentication error response was received as expected."
+```
+
+**WRONG Response**: Making a new post_api call
+
+#### Example 2: JWT Token Extraction
+
+**Previous Step**: `When I successfully login with valid credentials "admin@invitedekho.com" and "Test@123456"`
+**Previous Response**: `Status: 200, Body: {"jwtToken": "eyJhbGciOiJIUzI1..."}`
+
+**Assertion Step**: `"And I extract the JWT token from the response"`
+
+**CORRECT Response**:
+
+```
+"JWT Token extracted from the previous login response:
+Token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI5NDEyODE3NjY3...
+The token is present and properly formatted."
+```
+
+**WRONG Response**: Making a new post_api call
+
+#### Example 3: Success Response Verification
+
+**Previous Step**: `When I login to InviteDeKho with email "admin@invitedekho.com" and password "Test@123456"`
+**Previous Response**: `Status: 200, Body: {"jwtToken": "eyJhbGciOiJIUzI1..."}`
+
+**Assertion Step**: `"Then I should receive a successful authentication response"`
+
+**CORRECT Response**:
+
+```
+"The previous login attempt was successful:
+- Status Code: 200 (success)
+- Response contains JWT token
+- Authentication was completed successfully as expected."
+```
+
+**WRONG Response**: Making a new post_api call
+
+### **Step Pattern Recognition:**
+
+**Keywords that indicate ASSERTION steps (examine previous responses):**
+
+- "should receive", "should contain", "should indicate"
+- "should be able to", "should have"
+- "extract", "verify", "check", "validate"
+- "the response should", "the error should", "the token should"
+- "the system should handle", "should be properly"
+
+**Keywords that indicate ACTION steps (make API calls):**
+
+- "I login", "I try to login", "I attempt"
+- "I send", "I submit", "I create"
+- "I update", "I delete", "I retrieve"
+
+### **Context Awareness for Assertions:**
+
+When processing assertion steps, ALWAYS:
+
+1. **Reference the most recent API call** and its results
+2. **Use specific data** from the previous response (status codes, messages, tokens)
+3. **Provide clear pass/fail determination** based on that data
+4. **Quote actual response values** to show verification was performed
