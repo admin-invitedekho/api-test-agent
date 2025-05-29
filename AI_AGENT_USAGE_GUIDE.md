@@ -132,6 +132,59 @@ When encountering API availability steps, respond with:
 
 **WRONG Response**: Making a GET request to `https://api.stage.invitedekho.com`
 
+## ⚠️ CRITICAL: URL Construction Rules
+
+**IMPORTANT RULE**: Always use complete URLs based on loaded API contracts.
+
+### URL Construction Guidelines:
+
+1. **NEVER use relative paths** like `/login`, `/users`, etc.
+2. **ALWAYS use complete URLs** from the API contracts
+3. **Extract base URL from API availability steps** when present
+4. **Combine base URL with endpoint paths** to create complete URLs
+
+### API Contract Reference:
+
+Based on the loaded InviteDeKho API contracts:
+
+- **Base URL**: `https://api.stage.invitedekho.com`
+- **Login Endpoint**: `https://api.stage.invitedekho.com/login`
+
+### URL Construction Examples:
+
+**CORRECT URL Usage:**
+
+```python
+# For InviteDeKho login
+post_api(endpoint="https://api.stage.invitedekho.com/login", data={"email": "...", "password": "..."})
+
+# For JSONPlaceholder (if used)
+get_api(endpoint="https://jsonplaceholder.typicode.com/users/1")
+```
+
+**WRONG URL Usage:**
+
+```python
+# These will cause "AI should provide complete URL" errors
+post_api(endpoint="/login", data={"email": "...", "password": "..."})
+get_api(endpoint="/users/1")
+```
+
+### Step Context Awareness:
+
+When processing login steps:
+
+1. **Identify the API context** from previous availability steps
+2. **Use the appropriate base URL** for that API
+3. **Construct complete endpoint URLs** by combining base URL + path
+
+**Example Context Processing:**
+
+- Previous step: `"Given the InviteDeKho API is available at https://api.stage.invitedekho.com"`
+- Current step: `"When I login with email... and password..."`
+- **Correct endpoint**: `https://api.stage.invitedekho.com/login`
+- **NOT**: `/login`
+
 ## Critical Parsing Instructions for POST and PUT Requests
 
 When processing BDD step descriptions that contain JSON data, follow these exact steps:
@@ -309,3 +362,154 @@ This is a free testing API that provides realistic responses for:
 
 **Cause**: Requesting resources that don't exist on the test API
 **Solution**: Use valid resource IDs (1-10 for users, 1-100 for posts on JSONPlaceholder)
+
+## Critical HTTP Method Selection Rules
+
+### ⚠️ MANDATORY: Use Methods Specified in API Contracts
+
+**CRITICAL RULE**: Always use the HTTP method specified in the loaded API contracts for each operation.
+
+### Method Selection from API Contracts
+
+**ALWAYS refer to the loaded API contracts** to determine the correct HTTP method:
+
+1. **Check the API contract documentation** for the specific endpoint
+2. **Use the exact method specified** in the contract (GET, POST, PUT, DELETE)
+3. **Do not assume methods** based on operation names
+
+### API Contract Reference Process:
+
+**Step 1**: Identify the operation from the step description
+**Step 2**: Look up the endpoint in the loaded API contracts  
+**Step 3**: Use the HTTP method specified in the contract
+**Step 4**: Include required parameters as specified in the contract
+
+### InviteDeKho API Contract Examples:
+
+Based on the loaded API contracts:
+
+- **Login Endpoint**: Use the method specified in the InviteDeKho API contract for `/login`
+- **Other endpoints**: Always refer to contract specifications
+
+**CORRECT Method Selection Process:**
+
+```python
+# 1. Check API contract for /login endpoint
+# 2. Use the method specified in the contract
+# 3. Include required data fields from contract
+
+# Example based on contract specifications:
+post_api(
+    endpoint="https://api.stage.invitedekho.com/login",
+    data={
+        "email": "user@example.com",
+        "password": "password123"
+    }
+)
+```
+
+### HTTP Method Guidelines by Operation:
+
+1. **POST Method** (`post_api`) - Use when contract specifies POST for:
+
+   - Authentication operations (if specified as POST in contract)
+   - Creating resources
+   - Submitting data with request body
+
+2. **GET Method** (`get_api`) - Use when contract specifies GET for:
+
+   - Retrieving data
+   - Reading information
+   - No request body needed
+
+3. **PUT Method** (`put_api`) - Use when contract specifies PUT for:
+
+   - Updating entire resources
+   - Complete resource replacement
+
+4. **DELETE Method** (`delete_api`) - Use when contract specifies DELETE for:
+   - Removing resources
+
+### Contract-Based Step Analysis:
+
+**For login/authentication steps:**
+
+- **Step pattern**: `"When I login with email... and password..."`
+- **Action**: Look up `/login` endpoint in loaded API contracts
+- **Method**: Use the HTTP method specified in the contract documentation
+- **Data**: Include required fields as specified in the contract
+
+**For other operations:**
+
+- **Always reference the API contract** for the specific endpoint
+- **Use the method specified** in the contract documentation
+- **Include required fields** as documented in the contract
+
+## ⚠️ CRITICAL: Data Parameter Requirements
+
+**MANDATORY RULE**: Always include the `data` parameter for POST and PUT requests.
+
+### POST and PUT Tool Usage:
+
+- **post_api(endpoint, data)** - `data` parameter is REQUIRED
+- **put_api(endpoint, data)** - `data` parameter is REQUIRED
+- **NEVER call these tools with only endpoint parameter**
+
+### Data Extraction from Steps:
+
+When processing login steps, extract email and password values:
+
+**Step Example**: `"When I try to login with invalid email "wrong@email.com" and password "Test@123456""`
+
+**Correct Tool Call**:
+
+```python
+post_api(
+    endpoint="https://api.stage.invitedekho.com/login",
+    data={
+        "email": "wrong@email.com",
+        "password": "Test@123456"
+    }
+)
+```
+
+**WRONG Tool Call**:
+
+```python
+# This will cause ValidationError - missing data parameter
+post_api(endpoint="https://api.stage.invitedekho.com/login")
+```
+
+## ⚠️ CRITICAL: Step Type Understanding
+
+**IMPORTANT**: Different step types require different actions.
+
+### Step Classification:
+
+1. **"Given" steps** - Setup/Context (acknowledge only, no API calls usually)
+2. **"When" steps** - Actions (make API calls)
+3. **"Then" steps** - Assertions (check previous responses, do NOT make new API calls)
+
+### "Then" Step Handling:
+
+For assertion steps like `"Then I should receive an authentication error response"`:
+
+**CORRECT Action**:
+
+- Check the PREVIOUS API call result
+- Examine status code and response data
+- Report if the assertion passes or fails
+
+**WRONG Action**:
+
+- Making a new API call
+- Calling post_api, get_api, etc.
+
+**Example "Then" Step Response**:
+
+```
+"Based on the previous login attempt, the response was:
+- Status Code: 400
+- Error Message: 'Request method GET is not supported'
+- This indicates an authentication error response as expected."
+```

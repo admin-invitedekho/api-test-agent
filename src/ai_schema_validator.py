@@ -38,6 +38,11 @@ class AISchemaValidator:
         try:
             response = self.agent.process_request(validation_prompt)
             
+            # Ensure response is always a string to prevent NoneType errors
+            if response is None:
+                response = ''
+            response = str(response)
+            
             if response.startswith("VALID"):
                 return True, None
             elif response.startswith("INVALID:"):
@@ -76,6 +81,11 @@ class AISchemaValidator:
         
         try:
             response = self.agent.process_request(validation_prompt)
+            
+            # Ensure response is always a string to prevent NoneType errors
+            if response is None:
+                response = ''
+            response = str(response)
             
             if response.startswith("VALID"):
                 return True, None

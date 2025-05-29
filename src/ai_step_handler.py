@@ -153,6 +153,11 @@ class AIStepHandler:
         """Extract HTTP method from agent response"""
         if isinstance(agent_response, dict) and 'tool_execution' in agent_response:
             tool_name = agent_response['tool_execution'].get('tool_name', '')
+            # Ensure tool_name is always a string to prevent NoneType errors
+            if tool_name is None:
+                tool_name = ''
+            tool_name = str(tool_name)
+            
             if 'get' in tool_name.lower():
                 return 'GET'
             elif 'post' in tool_name.lower():

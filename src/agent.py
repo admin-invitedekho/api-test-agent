@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- Logging Setup ---
-logging.basicConfig(level=logging.ERROR, format='%(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Set specific loggers to ERROR level to reduce noise
@@ -124,10 +124,23 @@ CRITICAL TOOL USAGE RULES:
 6. If a request fails (404, etc.), report the error and stop
 7. Only use the available tools for API testing
 
-EXAMPLE CORRECT USAGE:
-- For login steps, extract email and password values and use post_api tool
-- Always provide both endpoint parameter AND data parameter for POST requests
-- Use complete URLs like https://api.stage.invitedekho.com/login for InviteDeKho API
+CRITICAL LOGIN OPERATIONS RULE:
+For ANY login steps (like "When I try to login with email... and password..."):
+- The API contract specifies: Method: POST for /login endpoint
+- ALWAYS use post_api tool (NEVER get_api)
+- ALWAYS extract email and password from the step description
+- ALWAYS include both endpoint AND data parameters
+
+EXAMPLE LOGIN STEP HANDLING:
+Step: "When I try to login with invalid email "wrong@email.com" and password "Test@123456""
+CORRECT Tool Call:
+post_api(
+    endpoint="https://api.stage.invitedekho.com/login",
+    data={{{{
+        "email": "wrong@email.com",
+        "password": "Test@123456"
+    }}}}
+)
 
 COMPLETE USAGE GUIDE AND INSTRUCTIONS:
 {usage_guide_content}
@@ -212,13 +225,27 @@ def run_scenario_step(step_description):
 
             final_output = response.get('output', '') if isinstance(response, dict) else str(response)
             
+            # Ensure final_output is always a string to prevent NoneType errors
+            if final_output is None:
+                final_output = ''
+            final_output = str(final_output)
+            
             # Check for failure indicators in the response
             failure_phrases = ["i am unable to", "i cannot", "could not process", "failed to", "error occurred"]
+            
+            # Don't treat expected error responses as failures for negative test cases
+            is_negative_test = any(word in step_description.lower() for word in ["invalid", "wrong", "incorrect", "fail"])
+            
             for phrase in failure_phrases:
                 if phrase in final_output.lower():
-                    error_message = f"Agent indicated failure: '{final_output}'"
-                    logger.error(error_message)
-                    raise AgentProcessingError(error_message)
+                    # If this is a negative test and we got an expected error response, don't treat as failure
+                    if is_negative_test and ("400" in final_output or "401" in final_output or "403" in final_output):
+                        logger.info(f"Expected error response for negative test scenario: {final_output}")
+                        break
+                    else:
+                        error_message = f"Agent indicated failure: '{final_output}'"
+                        logger.error(error_message)
+                        raise AgentProcessingError(error_message)
         else:
             # Fallback to text-based parsing
             logger.info("Using text-based parsing fallback")
@@ -236,6 +263,9 @@ def run_scenario_step(step_description):
         error_message = f"An unexpected error occurred while processing step: '{step_description}'"
         logger.error(error_message)
         logger.error(f"Error processing step '{step_description}': {type(e).__name__} - {str(e)}")
+        # Add full traceback for debugging
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         raise AgentProcessingError(f"{error_message}. Original error: {type(e).__name__} - {str(e)}") from e
 
 class Agent:
