@@ -4,7 +4,7 @@ import json
 from langchain.tools import tool
 import shlex # For safely quoting shell arguments
 
-BASE_API_URL = "https://jsonplaceholder.typicode.com" # Example API, replace with your actual API base URL
+# API tools now rely on AI to provide complete URLs based on loaded contracts
 
 # Global context to store the last tool execution results
 # This allows step definitions to access detailed tool outputs
@@ -19,7 +19,11 @@ LAST_TOOL_EXECUTION = {
 
 def _construct_curl_command(method: str, endpoint: str, params: dict = None, data: dict = None, headers: dict = None) -> str:
     """Helper function to construct a curl command string."""
-    full_url = f"{BASE_API_URL}{endpoint}"
+    # AI should provide complete URLs based on loaded contracts
+    if not endpoint.startswith(('http://', 'https://')):
+        raise ValueError(f"AI should provide complete URL, got: {endpoint}")
+    
+    full_url = endpoint
     curl_parts = ['curl', '-X', method]
 
     # Add headers
@@ -45,22 +49,21 @@ def _construct_curl_command(method: str, endpoint: str, params: dict = None, dat
 @tool
 def get_api(endpoint: str, params: dict = None) -> dict:
     """Sends a GET request to the specified API endpoint.
-       Provide the endpoint (e.g., /users/1) and optional query parameters."""
+       AI should provide complete URL based on loaded contracts (e.g., https://api.stage.invitedekho.com/login)"""
     global LAST_TOOL_EXECUTION
-    request_headers = {"Accept": "application/json"} # Example header
+    request_headers = {"Accept": "application/json"}
     curl_command = _construct_curl_command('GET', endpoint, params=params, headers=request_headers)
     tool_result = {"curl_command": curl_command, "tool_name": "get_api", "endpoint": endpoint, "params": params}
     try:
-        response = requests.get(f"{BASE_API_URL}{endpoint}", params=params, headers=request_headers)
+        response = requests.get(endpoint, params=params, headers=request_headers)
         tool_result["status_code"] = response.status_code
         tool_result["body"] = response.text
         try:
             tool_result["json_response"] = response.json()
         except json.JSONDecodeError:
             tool_result["json_response"] = None
-        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+        response.raise_for_status()
         
-        # Store in global context for step definitions
         LAST_TOOL_EXECUTION.update(tool_result)
         return tool_result
     except requests.exceptions.RequestException as e:
@@ -77,20 +80,19 @@ def get_api(endpoint: str, params: dict = None) -> dict:
             tool_result["body"] = "No response"
             tool_result["json_response"] = None
         
-        # Store in global context for step definitions
         LAST_TOOL_EXECUTION.update(tool_result)
         return tool_result
 
 @tool
 def post_api(endpoint: str, data: dict) -> dict:
     """Sends a POST request to the specified API endpoint with the given JSON data.
-       Provide the endpoint (e.g., /users) and the JSON data payload."""
+       AI should provide complete URL based on loaded contracts (e.g., https://api.stage.invitedekho.com/login)"""
     global LAST_TOOL_EXECUTION
     request_headers = {"Content-Type": "application/json", "Accept": "application/json"}
     curl_command = _construct_curl_command('POST', endpoint, data=data, headers=request_headers)
     tool_result = {"curl_command": curl_command, "tool_name": "post_api", "endpoint": endpoint, "data": data}
     try:
-        response = requests.post(f"{BASE_API_URL}{endpoint}", json=data, headers=request_headers)
+        response = requests.post(endpoint, json=data, headers=request_headers)
         tool_result["status_code"] = response.status_code
         tool_result["body"] = response.text
         try:
@@ -99,7 +101,6 @@ def post_api(endpoint: str, data: dict) -> dict:
             tool_result["json_response"] = None
         response.raise_for_status()
         
-        # Store in global context for step definitions
         LAST_TOOL_EXECUTION.update(tool_result)
         return tool_result
     except requests.exceptions.RequestException as e:
@@ -116,20 +117,19 @@ def post_api(endpoint: str, data: dict) -> dict:
             tool_result["body"] = "No response"
             tool_result["json_response"] = None
         
-        # Store in global context for step definitions
         LAST_TOOL_EXECUTION.update(tool_result)
         return tool_result
 
 @tool
 def put_api(endpoint: str, data: dict) -> dict:
     """Sends a PUT request to the specified API endpoint with the given JSON data.
-       Provide the endpoint (e.g., /users/1) and the JSON data payload for update."""
+       AI should provide complete URL based on loaded contracts (e.g., https://jsonplaceholder.typicode.com/users/1)"""
     global LAST_TOOL_EXECUTION
     request_headers = {"Content-Type": "application/json", "Accept": "application/json"}
     curl_command = _construct_curl_command('PUT', endpoint, data=data, headers=request_headers)
     tool_result = {"curl_command": curl_command, "tool_name": "put_api", "endpoint": endpoint, "data": data}
     try:
-        response = requests.put(f"{BASE_API_URL}{endpoint}", json=data, headers=request_headers)
+        response = requests.put(endpoint, json=data, headers=request_headers)
         tool_result["status_code"] = response.status_code
         tool_result["body"] = response.text
         try:
@@ -138,7 +138,6 @@ def put_api(endpoint: str, data: dict) -> dict:
             tool_result["json_response"] = None
         response.raise_for_status()
         
-        # Store in global context for step definitions
         LAST_TOOL_EXECUTION.update(tool_result)
         return tool_result
     except requests.exceptions.RequestException as e:
@@ -155,36 +154,33 @@ def put_api(endpoint: str, data: dict) -> dict:
             tool_result["body"] = "No response"
             tool_result["json_response"] = None
         
-        # Store in global context for step definitions
         LAST_TOOL_EXECUTION.update(tool_result)
         return tool_result
 
 @tool
 def delete_api(endpoint: str) -> dict:
     """Sends a DELETE request to the specified API endpoint.
-       Provide the endpoint (e.g., /users/1) to delete the resource."""
+       AI should provide complete URL based on loaded contracts (e.g., https://jsonplaceholder.typicode.com/users/1)"""
     global LAST_TOOL_EXECUTION
     request_headers = {"Accept": "application/json"}
     curl_command = _construct_curl_command('DELETE', endpoint, headers=request_headers)
     tool_result = {"curl_command": curl_command, "tool_name": "delete_api", "endpoint": endpoint}
     try:
-        response = requests.delete(f"{BASE_API_URL}{endpoint}", headers=request_headers)
+        response = requests.delete(endpoint, headers=request_headers)
         tool_result["status_code"] = response.status_code
-        tool_result["body"] = response.text # May be empty for DELETE
+        tool_result["body"] = response.text
 
-        # For DELETE, 204 No Content is common.
-        # response.json() would fail on an empty body.
+        # For DELETE, 204 No Content is common
         if response.status_code != 204 and response.text:
             try:
                 tool_result["json_response"] = response.json()
             except json.JSONDecodeError:
-                tool_result["json_response"] = None # Keep as None if parsing fails
+                tool_result["json_response"] = None
         else:
-            tool_result["json_response"] = None # No JSON body expected or present
+            tool_result["json_response"] = None
         
         response.raise_for_status()
         
-        # Store in global context for step definitions
         LAST_TOOL_EXECUTION.update(tool_result)
         return tool_result
     except requests.exceptions.RequestException as e:
@@ -201,6 +197,5 @@ def delete_api(endpoint: str) -> dict:
             tool_result["body"] = "No response"
             tool_result["json_response"] = None
         
-        # Store in global context for step definitions
         LAST_TOOL_EXECUTION.update(tool_result)
         return tool_result

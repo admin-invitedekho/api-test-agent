@@ -1,7 +1,8 @@
 langchain
-openai
+langchain-community
 langchain-openai
 python-dotenv
 requests
 behave
 allure-behave
+jsonschema
