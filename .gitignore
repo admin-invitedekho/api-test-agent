@@ -69,3 +69,9 @@ htmlcov/
 
 # Behave
 reports/
+
+# Generated Reports (keep scripts, ignore generated files)
+test_report.html
+test_results*.json
+*.output
+progress_report.txt

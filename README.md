@@ -90,6 +90,58 @@ The test runner provides clear feedback:
    Success Rate: 100.0%
 ```
 
+## 📊 **HTML Report Generation**
+
+The framework includes a beautiful HTML report generator that creates interactive test reports.
+
+### Option 3: Enhanced Test Runner with HTML Reports
+
+```bash
+python run_tests_with_reports.py
+```
+
+This enhanced script will:
+
+- Run all tests and generate JSON results
+- Create beautiful interactive HTML reports
+- Generate JUnit XML for CI/CD integration
+- Automatically open the HTML report in your browser
+
+### 🌐 **Quick Report Generation**
+
+```bash
+# Generate JSON results and HTML report
+python run_tests_with_reports.py
+
+# Or generate HTML from existing JSON results
+python generate_html_report.py
+```
+
+### ✨ **Report Features**
+
+- **🎨 Beautiful Design**: Modern, responsive UI with gradient backgrounds
+- **📈 Interactive Dashboard**: Click-to-expand scenario details
+- **📊 Statistics Grid**: Success rates, pass/fail counts, execution times
+- **📱 Mobile Friendly**: Responsive design for all devices
+- **🔍 Detailed Step Information**: Individual step status and timing
+- **🎯 Professional Styling**: Hover effects and smooth animations
+
+### 📁 **Generated Report Files**
+
+```
+📊 JSON Report:     test_results_pretty.json
+🌐 HTML Report:     test_report.html
+📋 JUnit XML:       reports/TESTS-invitedekho_login_tests.xml
+```
+
+### 🔧 **Report Formats Available**
+
+| Format        | Usage                 | Best For                     |
+| ------------- | --------------------- | ---------------------------- |
+| **HTML**      | Interactive dashboard | Human viewing, presentations |
+| **JSON**      | Machine-readable data | Automation, integrations     |
+| **JUnit XML** | CI/CD compatibility   | Jenkins, GitHub Actions      |
+
 ## Writing AI-Compatible Scenarios
 
 To ensure your scenarios work effectively with the AI agent, follow these proven patterns and guidelines:
