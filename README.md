@@ -23,16 +23,17 @@ This project implements an AI-powered agent that:
 ```
 api-test-agent/
 ├── features/                 # Gherkin feature files
-│   ├── ai_api_tests.feature # Sample AI-driven tests
+│   ├── invitedekho_login_tests.feature # Login API test scenarios
 │   └── steps/               # Step definitions
-│       ├── ai_steps.py      # AI-powered step handler
-│       └── api_steps.py     # Compatibility layer
+│       └── enhanced_steps.py # AI-powered step handler
 ├── src/
 │   ├── agent.py             # Main AI agent logic
 │   ├── api_tools.py         # API interaction tools
 │   ├── ai_step_handler.py   # AI step processing
-│   └── intelligent_validator.py # Smart validation
+│   └── ai_schema_validator.py # Response validation
+├── contracts/               # API contract documentation
 ├── requirements.txt         # Dependencies
+├── run_tests.py            # Test runner script
 └── README.md               # This file
 ```
 
@@ -40,78 +41,54 @@ api-test-agent/
 
 1. Install dependencies: `pip install -r requirements.txt`
 2. Set up your OpenAI API key in `.env`
-3. Run tests: `behave features/ai_api_tests.feature`
+3. Run tests: `python run_tests.py` or `behave features/`
 
-## Allure Reporting Integration
+## 🚀 **Running Tests**
 
-This project includes comprehensive Allure reporting for beautiful, detailed test reports.
-
-### 📊 **Running Tests with Allure Reports**
-
-#### Option 1: Using the Automated Script (Recommended)
+### Option 1: Using the Test Runner Script (Recommended)
 
 ```bash
-python run_tests_with_allure.py
+python run_tests.py
 ```
 
 This script will:
 
-- Clean previous results
-- Run all tests with Allure formatting
-- Generate HTML reports automatically
-- Attempt to open the report in your browser
+- Run all test scenarios individually for detailed feedback
+- Provide a comprehensive summary of results
+- Show pass/fail status for each scenario
+- Run all scenarios together for a final verification
 
-#### Option 2: Manual Allure Integration
+### Option 2: Direct Behave Execution
 
 ```bash
-# Run tests with Allure formatter
-behave features/invitedekho_login_tests.feature -f allure_behave.formatter:AllureFormatter -o allure-results
+# Run all tests
+behave features/invitedekho_login_tests.feature
 
-# Generate HTML report
-allure generate allure-results --clean -o allure-report
+# Run a specific scenario
+behave features/invitedekho_login_tests.feature -n "Successful login with valid credentials"
 
-# Open report in browser
-allure serve allure-results
+# Run with detailed output
+behave features/invitedekho_login_tests.feature --no-capture
 ```
 
-### 🎨 **Allure Report Features**
+### 📊 **Test Output**
 
-The generated Allure reports include:
-
-- **Test Overview**: Summary of passed/failed tests with statistics
-- **Test Suites**: Organized by feature files and scenarios
-- **Timeline**: Execution timeline showing test duration
-- **Test Details**:
-  - Step-by-step execution logs
-  - API call details (endpoints, request/response data)
-  - Error messages and stack traces
-  - Screenshots and attachments
-- **Trends**: Historical test execution trends
-- **Categories**: Failure categorization and analysis
-
-### 📁 **Report Structure**
+The test runner provides clear feedback:
 
 ```
-allure-results/     # Raw test results (JSON files)
-allure-report/      # Generated HTML report
-├── index.html      # Main report page
-├── data/           # Test data and results
-└── widgets/        # Interactive components
+🚀 Running all test scenarios...
+📋 Found 8 scenarios to test
+🧪 Running scenario: Successful login with valid credentials
+✅ Scenario: Successful login with valid credentials - PASSED
+🧪 Running scenario: Login failure with invalid email
+✅ Scenario: Login failure with invalid email - PASSED
+
+📊 Test Summary:
+   Total Scenarios: 8
+   ✅ Passed: 8
+   ❌ Failed: 0
+   Success Rate: 100.0%
 ```
-
-### 🔧 **Configuration**
-
-Allure integration is configured in:
-
-- `behave.ini` - Behave configuration with Allure formatter
-- `requirements.txt` - Includes `allure-behave==2.13.2`
-- `run_tests_with_allure.py` - Automated test execution script
-
-### 💡 **Viewing Reports**
-
-1. **Local Viewing**: `allure serve allure-results`
-2. **Static Files**: Open `allure-report/index.html` in a browser
-3. **CI/CD Integration**: Deploy `allure-report/` folder to web hosting
 
 ## Writing AI-Compatible Scenarios
 

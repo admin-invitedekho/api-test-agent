@@ -53,11 +53,6 @@ venv.bak/
 ehthumbs.db
 Thumbs.db
 
-# Allure Reports
-allure-report/
-allure-results/
-allure-results-*/
-
 # Backup files
 *.bak
 *.backup
