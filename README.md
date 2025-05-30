@@ -142,6 +142,200 @@ python generate_html_report.py
 | **JSON**      | Machine-readable data | Automation, integrations     |
 | **JUnit XML** | CI/CD compatibility   | Jenkins, GitHub Actions      |
 
+## 📋 **Report Generation Mechanisms**
+
+The framework supports multiple report generation methods using both built-in Behave formatters and custom HTML generators.
+
+### 🏗️ **Built-in Behave Formatters**
+
+Behave provides several built-in formatters for different reporting needs:
+
+#### **1. JSON Reports**
+
+```bash
+# Compact JSON format
+behave features/ --format json --outfile results.json
+
+# Pretty formatted JSON (human-readable)
+behave features/ --format json.pretty --outfile results_pretty.json
+```
+
+#### **2. JUnit XML Reports**
+
+```bash
+# Generate JUnit XML for CI/CD
+behave features/ --junit --junit-directory reports/
+
+# With custom directory
+mkdir test-reports
+behave features/ --junit --junit-directory test-reports/
+```
+
+#### **3. Progress Reports**
+
+```bash
+# Dotted progress for scenarios
+behave features/ --format progress --outfile progress.txt
+
+# Detailed step progress
+behave features/ --format progress3 --outfile detailed_progress.txt
+```
+
+#### **4. Plain Text Reports**
+
+```bash
+# Basic compatibility format
+behave features/ --format plain --outfile results.txt
+
+# Pretty colored output (default)
+behave features/ --format pretty --outfile colored_results.txt
+```
+
+### 🌐 **Custom HTML Report Generation**
+
+#### **Method 1: All-in-One Script (Recommended)**
+
+```bash
+# Complete workflow: Tests + Reports + Browser opening
+python run_tests_with_reports.py
+```
+
+**What it does:**
+
+1. Runs all test scenarios
+2. Generates JSON results
+3. Creates beautiful HTML report
+4. Generates JUnit XML for CI/CD
+5. Opens HTML report in browser automatically
+
+#### **Method 2: Step-by-Step Manual Process**
+
+```bash
+# Step 1: Run tests and generate JSON
+behave features/ --format json.pretty --outfile test_results.json --no-capture
+
+# Step 2: Generate HTML from JSON
+python generate_html_report.py
+
+# Step 3: Open the report
+open test_report.html  # macOS
+# or
+start test_report.html  # Windows
+# or
+xdg-open test_report.html  # Linux
+```
+
+#### **Method 3: Custom JSON Input**
+
+```bash
+# Generate HTML from specific JSON file
+python -c "from generate_html_report import generate_html_report; generate_html_report('my_results.json', 'my_report.html')"
+```
+
+### 🔄 **Multiple Format Generation**
+
+Generate all report formats simultaneously:
+
+```bash
+# Method 1: Using our enhanced script
+python run_tests_with_reports.py
+
+# Method 2: Manual generation of all formats
+behave features/ --format json.pretty --outfile results.json --no-capture
+behave features/ --junit --junit-directory reports/ --no-capture
+python generate_html_report.py
+```
+
+### 📊 **Report Comparison**
+
+| Feature                 | Built-in Pretty | JSON | JUnit XML | Our HTML |
+| ----------------------- | --------------- | ---- | --------- | -------- |
+| **Human Readable**      | ✅              | ❌   | ❌        | ✅       |
+| **Machine Readable**    | ❌              | ✅   | ✅        | ❌       |
+| **CI/CD Integration**   | ❌              | ✅   | ✅        | ❌       |
+| **Interactive**         | ❌              | ❌   | ❌        | ✅       |
+| **Visual Appeal**       | ⚠️              | ❌   | ❌        | ✅       |
+| **Mobile Friendly**     | ❌              | ❌   | ❌        | ✅       |
+| **Detailed Statistics** | ⚠️              | ✅   | ✅        | ✅       |
+| **Step Timing**         | ✅              | ✅   | ✅        | ✅       |
+| **Presentations**       | ❌              | ❌   | ❌        | ✅       |
+
+### 🎯 **When to Use Each Format**
+
+#### **📱 HTML Reports** - Use for:
+
+- Team presentations and demos
+- Stakeholder reviews
+- Manual test result analysis
+- Beautiful documentation
+- Interactive exploration of results
+
+#### **📊 JSON Reports** - Use for:
+
+- API integrations
+- Custom data processing
+- Automation scripts
+- Data analysis tools
+- Archival and historical tracking
+
+#### **📋 JUnit XML** - Use for:
+
+- Jenkins integration
+- GitHub Actions workflows
+- Azure DevOps pipelines
+- CI/CD reporting dashboards
+- Test result aggregation tools
+
+#### **🖥️ Console Output** - Use for:
+
+- Development debugging
+- Quick test verification
+- Local development workflow
+- Command-line automation
+- Continuous monitoring
+
+### 🔧 **Advanced Configuration**
+
+#### **Custom Report Styling**
+
+Modify `generate_html_report.py` to customize:
+
+- Color schemes and themes
+- Company branding and logos
+- Additional statistics and metrics
+- Custom CSS styling
+- JavaScript interactions
+
+#### **Automated Report Distribution**
+
+```bash
+# Example: Email reports automatically
+python run_tests_with_reports.py && \
+  echo "Test report attached" | mail -s "Test Results" -A test_report.html team@company.com
+```
+
+#### **Integration with CI/CD**
+
+```yaml
+# GitHub Actions example
+- name: Run Tests and Generate Reports
+  run: |
+    python run_tests_with_reports.py
+
+- name: Upload HTML Report
+  uses: actions/upload-artifact@v3
+  with:
+    name: test-report
+    path: test_report.html
+
+- name: Publish Test Results
+  uses: dorny/test-reporter@v1
+  with:
+    name: Test Results
+    path: reports/*.xml
+    reporter: java-junit
+```
+
 ## Writing AI-Compatible Scenarios
 
 To ensure your scenarios work effectively with the AI agent, follow these proven patterns and guidelines:
