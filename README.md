@@ -42,6 +42,77 @@ api-test-agent/
 2. Set up your OpenAI API key in `.env`
 3. Run tests: `behave features/ai_api_tests.feature`
 
+## Allure Reporting Integration
+
+This project includes comprehensive Allure reporting for beautiful, detailed test reports.
+
+### 📊 **Running Tests with Allure Reports**
+
+#### Option 1: Using the Automated Script (Recommended)
+
+```bash
+python run_tests_with_allure.py
+```
+
+This script will:
+
+- Clean previous results
+- Run all tests with Allure formatting
+- Generate HTML reports automatically
+- Attempt to open the report in your browser
+
+#### Option 2: Manual Allure Integration
+
+```bash
+# Run tests with Allure formatter
+behave features/invitedekho_login_tests.feature -f allure_behave.formatter:AllureFormatter -o allure-results
+
+# Generate HTML report
+allure generate allure-results --clean -o allure-report
+
+# Open report in browser
+allure serve allure-results
+```
+
+### 🎨 **Allure Report Features**
+
+The generated Allure reports include:
+
+- **Test Overview**: Summary of passed/failed tests with statistics
+- **Test Suites**: Organized by feature files and scenarios
+- **Timeline**: Execution timeline showing test duration
+- **Test Details**:
+  - Step-by-step execution logs
+  - API call details (endpoints, request/response data)
+  - Error messages and stack traces
+  - Screenshots and attachments
+- **Trends**: Historical test execution trends
+- **Categories**: Failure categorization and analysis
+
+### 📁 **Report Structure**
+
+```
+allure-results/     # Raw test results (JSON files)
+allure-report/      # Generated HTML report
+├── index.html      # Main report page
+├── data/           # Test data and results
+└── widgets/        # Interactive components
+```
+
+### 🔧 **Configuration**
+
+Allure integration is configured in:
+
+- `behave.ini` - Behave configuration with Allure formatter
+- `requirements.txt` - Includes `allure-behave==2.13.2`
+- `run_tests_with_allure.py` - Automated test execution script
+
+### 💡 **Viewing Reports**
+
+1. **Local Viewing**: `allure serve allure-results`
+2. **Static Files**: Open `allure-report/index.html` in a browser
+3. **CI/CD Integration**: Deploy `allure-report/` folder to web hosting
+
 ## Writing AI-Compatible Scenarios
 
 To ensure your scenarios work effectively with the AI agent, follow these proven patterns and guidelines:
