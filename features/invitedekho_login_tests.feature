@@ -47,3 +47,10 @@ Feature: InviteDeKho Login API Testing
     Then I should be able to decode the token payload
     And the token should contain user identification information
     And the token should have proper expiration time
+
+  Scenario: API endpoint failure testing
+    Given the API is available at https://api.stage.invitedekho.com
+    When I try to login using a non-existent endpoint "/api/v999/nonexistent/login"
+    Then the system should return a 404 not found error
+    And the error response should be properly formatted
+    And the logs should show the failed API call attempt
