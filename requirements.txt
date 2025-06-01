@@ -5,3 +5,5 @@ python-dotenv==1.0.1
 requests
 behave==1.2.6
 jsonschema
+browser-use
+nest_asyncio

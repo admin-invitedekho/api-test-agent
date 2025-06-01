@@ -13,6 +13,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
 from api_tools import get_api, post_api, put_api, delete_api
 
+# Import UI handler for browser automation
+try:
+    from ui_handler import run_browser_instruction, BROWSERUSE_AVAILABLE
+    UI_HANDLER_AVAILABLE = True
+except ImportError:
+    UI_HANDLER_AVAILABLE = False
+    logging.warning("UI handler not available. Browser automation will be disabled.")
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -236,6 +244,7 @@ class AgentProcessingError(Exception):
 def run_scenario_step(step_description):
     """
     Runs a single BDD step using the AI agent with tool calling support.
+    Routes to either API automation or browser automation based on step content.
     Falls back to text parsing if tool calling is not available.
     """
     logger.info(f"Attempting to execute BDD step: '{step_description}'")
@@ -323,69 +332,120 @@ def run_scenario_step(step_description):
                 'tool_execution': {}
             }
     
-    # Clear the global tool execution before running
-    from api_tools import LAST_TOOL_EXECUTION
-    LAST_TOOL_EXECUTION.update({
-        "curl_command": None,
-        "status_code": None,
-        "body": None,
-        "json_response": None,
-        "tool_name": None,
-        "error": None
-    })
+    # ==================== ROUTING LOGIC ====================
+    # Decide whether this step should be handled by API tools or browser automation
+    action_type = ai_decide_tool(step_description)
+    logger.info(f"AI routing decision: '{action_type}' for step: '{step_description}'")
     
-    try:
-        if agent_executor is not None:
-            # Use tool-calling agent if available
-            logger.info("Using tool-calling agent")
-            filtered_input = {"input": step_description}
-            response = agent_executor.invoke(filtered_input)
-            logger.info(f"Tool-calling agent response received")
-
-            final_output = response.get('output', '') if isinstance(response, dict) else str(response)
-            
-            # Ensure final_output is always a string to prevent NoneType errors
-            if final_output is None:
-                final_output = ''
-            final_output = str(final_output)
-            
-            # Check for failure indicators in the response
-            failure_phrases = ["i am unable to", "i cannot", "could not process", "failed to", "error occurred"]
-            
-            # Don't treat expected error responses as failures for negative test cases
-            is_negative_test = any(word in step_description.lower() for word in ["invalid", "wrong", "incorrect", "fail"])
-            
-            for phrase in failure_phrases:
-                if phrase in final_output.lower():
-                    # If this is a negative test and we got an expected error response, don't treat as failure
-                    if is_negative_test and ("400" in final_output or "401" in final_output or "403" in final_output):
-                        logger.info(f"Expected error response for negative test scenario: {final_output}")
-                        break
-                    else:
-                        error_message = f"Agent indicated failure: '{final_output}'"
-                        logger.error(error_message)
-                        raise AgentProcessingError(error_message)
-        else:
-            # Fallback to text-based parsing
-            logger.info("Using text-based parsing fallback")
-            response = _execute_step_with_ollama(step_description)
-
-        # Return both the agent response and tool execution details
-        return {
-            'agent_response': response,
-            'tool_execution': dict(LAST_TOOL_EXECUTION)  # Create a copy
-        }
+    if action_type == 'browser':
+        # Route to browser automation
+        if not UI_HANDLER_AVAILABLE:
+            error_message = "Browser automation requested but UI handler not available. Please install browseruse."
+            logger.error(error_message)
+            return {
+                'agent_response': {'output': error_message},
+                'tool_execution': {'error': error_message, 'status': 'error'}
+            }
         
-    except AgentProcessingError:
-        raise
-    except Exception as e:
-        error_message = f"An unexpected error occurred while processing step: '{step_description}'"
-        logger.error(error_message)
-        logger.error(f"Error processing step '{step_description}': {type(e).__name__} - {str(e)}")
-        # Add full traceback for debugging
-        import traceback
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        raise AgentProcessingError(f"{error_message}. Original error: {type(e).__name__} - {str(e)}") from e
+        try:
+            # Execute browser instruction
+            logger.info(f"Executing browser instruction: {step_description}")
+            browser_result = run_browser_instruction(step_description)
+            
+            if browser_result.get('status') == 'success':
+                success_message = f"✅ Browser instruction executed successfully: {step_description}"
+                logger.info(success_message)
+                return {
+                    'agent_response': {'output': success_message},
+                    'tool_execution': {
+                        'tool_name': 'browser_automation',
+                        'instruction': step_description,
+                        'result': browser_result.get('result'),
+                        'status': 'success'
+                    }
+                }
+            else:
+                error_message = f"❌ Browser instruction failed: {browser_result.get('error', 'Unknown error')}"
+                logger.error(error_message)
+                raise AgentProcessingError(error_message)
+                
+        except Exception as e:
+            error_message = f"Browser automation error for step '{step_description}': {str(e)}"
+            logger.error(error_message)
+            raise AgentProcessingError(error_message)
+    
+    elif action_type == 'api':
+        # Route to API automation (existing logic)
+        logger.info("Routing to API automation")
+        
+        # Clear the global tool execution before running
+        from api_tools import LAST_TOOL_EXECUTION
+        LAST_TOOL_EXECUTION.update({
+            "curl_command": None,
+            "status_code": None,
+            "body": None,
+            "json_response": None,
+            "tool_name": None,
+            "error": None
+        })
+        
+        try:
+            if agent_executor is not None:
+                # Use tool-calling agent if available
+                logger.info("Using tool-calling agent for API automation")
+                filtered_input = {"input": step_description}
+                response = agent_executor.invoke(filtered_input)
+                logger.info(f"Tool-calling agent response received")
+
+                final_output = response.get('output', '') if isinstance(response, dict) else str(response)
+                
+                # Ensure final_output is always a string to prevent NoneType errors
+                if final_output is None:
+                    final_output = ''
+                final_output = str(final_output)
+                
+                # Check for failure indicators in the response
+                failure_phrases = ["i am unable to", "i cannot", "could not process", "failed to", "error occurred"]
+                
+                # Don't treat expected error responses as failures for negative test cases
+                is_negative_test = any(word in step_description.lower() for word in ["invalid", "wrong", "incorrect", "fail"])
+                
+                for phrase in failure_phrases:
+                    if phrase in final_output.lower():
+                        # If this is a negative test and we got an expected error response, don't treat as failure
+                        if is_negative_test and ("400" in final_output or "401" in final_output or "403" in final_output):
+                            logger.info(f"Expected error response for negative test scenario: {final_output}")
+                            break
+                        else:
+                            error_message = f"Agent indicated failure: '{final_output}'"
+                            logger.error(error_message)
+                            raise AgentProcessingError(error_message)
+            else:
+                # Fallback to text-based parsing
+                logger.info("Using text-based parsing fallback for API automation")
+                response = _execute_step_with_ollama(step_description)
+
+            # Return both the agent response and tool execution details
+            return {
+                'agent_response': response,
+                'tool_execution': dict(LAST_TOOL_EXECUTION)  # Create a copy
+            }
+            
+        except AgentProcessingError:
+            raise
+        except Exception as e:
+            error_message = f"An unexpected error occurred while processing API step: '{step_description}'"
+            logger.error(error_message)
+            logger.error(f"Error processing step '{step_description}': {type(e).__name__} - {str(e)}")
+            # Add full traceback for debugging
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            raise AgentProcessingError(f"{error_message}. Original error: {type(e).__name__} - {str(e)}") from e
+    
+    else:
+        # Unknown action type - default to API for backward compatibility
+        logger.warning(f"Unknown action type '{action_type}', defaulting to API automation")
+        return run_scenario_step(step_description.replace(step_description, step_description))  # Recursive call will go to API path
 
 class Agent:
     """Enhanced Agent class that works with Ollama and tool calling"""
@@ -552,3 +612,90 @@ def _execute_step_with_ollama(step_description):
             'output': f"Error executing {method} {endpoint}: {str(e)}",
             'error': str(e)
         }
+
+def ai_decide_tool(step_text: str) -> str:
+    """
+    Use AI to decide whether a step should be handled by API tools or browser automation
+    
+    Args:
+        step_text: The natural language step text
+        
+    Returns:
+        'api' for API-based actions, 'browser' for UI-based actions
+    """
+    step_lower = step_text.lower().strip()
+    
+    # Keywords that strongly indicate browser/UI actions
+    browser_keywords = [
+        'open', 'navigate', 'click', 'fill', 'type', 'select', 'enter',
+        'login page', 'web page', 'website', 'browser', 'form', 'button',
+        'input field', 'dropdown', 'checkbox', 'scroll', 'upload', 'download',
+        'screen', 'element', 'modal', 'popup', 'window', 'tab', 'link',
+        'menu', 'search box', 'submit', 'cancel', 'confirm', 'alert'
+    ]
+    
+    # Keywords that strongly indicate API actions
+    api_keywords = [
+        'api', 'endpoint', 'post', 'get', 'put', 'delete', 'patch',
+        'request', 'response', 'json', 'headers', 'status code',
+        'curl', 'rest', 'graphql', 'webhook', 'payload', 'parameters'
+    ]
+    
+    # Contextual phrases that indicate UI actions
+    ui_phrases = [
+        'open the login page', 'enter credentials', 'fill out the form',
+        'click the button', 'navigate to', 'login page and enter',
+        'interact with', 'web interface', 'user interface'
+    ]
+    
+    # Contextual phrases that indicate API actions  
+    api_phrases = [
+        'make a request', 'call the api', 'send data to',
+        'authenticate via api', 'test the endpoint', 'api call'
+    ]
+    
+    # Check for UI/browser indicators
+    ui_score = 0
+    api_score = 0
+    
+    # Check for browser keywords
+    for keyword in browser_keywords:
+        if keyword in step_lower:
+            ui_score += 1
+    
+    # Check for API keywords
+    for keyword in api_keywords:
+        if keyword in step_lower:
+            api_score += 1
+    
+    # Check for UI phrases (weighted higher)
+    for phrase in ui_phrases:
+        if phrase in step_lower:
+            ui_score += 2
+    
+    # Check for API phrases (weighted higher)
+    for phrase in api_phrases:
+        if phrase in step_lower:
+            api_score += 2
+    
+    # Special case: steps mentioning "page" or "login page" are likely UI
+    if 'page' in step_lower and 'api' not in step_lower:
+        ui_score += 2
+    
+    # Special case: steps with HTTP methods are likely API
+    http_methods = ['post', 'get', 'put', 'delete', 'patch']
+    for method in http_methods:
+        if step_lower.startswith(method + ' ') or ' ' + method + ' ' in step_lower:
+            api_score += 3
+    
+    # Decision logic
+    if ui_score > api_score:
+        return 'browser'
+    elif api_score > ui_score:
+        return 'api'
+    else:
+        # Default to API for backwards compatibility
+        # Unless it explicitly mentions browser/UI actions
+        if any(word in step_lower for word in ['open', 'navigate', 'click', 'page', 'browser']):
+            return 'browser'
+        return 'api'
