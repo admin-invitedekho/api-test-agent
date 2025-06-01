@@ -1,6 +1,7 @@
 langchain
 langchain-community
 langchain-openai
+langchain-google-genai
 python-dotenv==1.0.1
 requests
 behave==1.2.6

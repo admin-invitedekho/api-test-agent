@@ -3,35 +3,31 @@ Feature: User Profile Verification
   I want to verify my profile information after login
   So that I can ensure my account details are correct
 
-  Scenario: Step-by-step user profile verification
-    # Navigation
-    Given I open browser and navigate to "https://stage.invitedekho.com"
+  Scenario: Complete user profile verification workflow
+    # Navigate to the website
+    Given I open my browser and go to "https://stage.invitedekho.com"
     
-    # Login Process
-    When I click the "Login" button with reference "e58"
-    And I click "Sign in with Email" button with reference "e22"
-    And I fill "admin@invitedekho.com" into "Email Address" textbox with reference "e37"
-    And I fill "Test@123456" into "Password" textbox with reference "e42"
-    And I click "Sign in" button with reference "e47"
+    # Login to my account
+    When I click on the "Login" button
+    And I choose "Sign in with Email" option
+    And I enter "admin@invitedekho.com" in the email field
+    And I enter "Test@123456" in the password field
+    And I click the "Sign in" button to log in
     
-    # Post-Login Navigation
-    Then I wait for 3 seconds for login to complete
-    And I should be on homepage with URL "https://stage.invitedekho.com/"
+    # Wait for login to complete
+    Then I should wait for the page to load completely
+    And I should be logged in and see the homepage
     
-    # Access User Profile
-    When I click user icon button with reference "e118"
-    And I click "Profile" menu item with reference "e1051"
+    # Navigate to my profile
+    When I click on the user menu icon
+    And I select "Profile" from the dropdown menu
     
-    # Verify Profile Information
-    Then I should be on "/profile/" page
-    And I should see the following profile data:
+    # Verify my profile information is correct
+    Then I should be on my profile page
+    And I should see my personal information displayed correctly:
       """
       First Name: Vibhor
       Last Name: Goyal
       Email: admin@invitedekho.com
       Phone: 9412817667
       """
-    
-    # Documentation
-    When I take a screenshot named "user-profile-info.png"
-    Then the verification process is complete 

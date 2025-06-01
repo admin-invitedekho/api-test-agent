@@ -33,14 +33,33 @@ logger = logging.getLogger(__name__)
 logging.getLogger('httpx').setLevel(logging.ERROR)
 logging.getLogger('openai').setLevel(logging.ERROR)
 logging.getLogger('langchain').setLevel(logging.ERROR)
+logging.getLogger('google.generativeai').setLevel(logging.ERROR)
 # --- End Logging Setup ---
 
-# Configure LLM to use OpenAI ChatGPT
+# Configure LLM to use OpenAI ChatGPT, Gemini, or Ollama
 def get_llm():
-    """Get the configured LLM (OpenAI or Ollama based on environment)"""
+    """Get the configured LLM (OpenAI, Gemini, or Ollama based on environment)"""
     use_ollama = os.getenv('USE_OLLAMA', 'false').lower() == 'true'
+    use_gemini = os.getenv('USE_GEMINI', 'false').lower() == 'true'
     
-    if use_ollama:
+    if use_gemini:
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            api_key = os.getenv('GOOGLE_API_KEY')
+            if not api_key:
+                raise ValueError("GOOGLE_API_KEY environment variable is required when USE_GEMINI=true")
+            
+            model_name = os.getenv('GEMINI_MODEL', 'gemini-2.5-pro-preview-05-06')
+            logger.info(f"Using Gemini model: {model_name}")
+            return ChatGoogleGenerativeAI(
+                model=model_name,
+                google_api_key=api_key,
+                temperature=0.1
+            )
+        except ImportError:
+            logger.error("Gemini dependencies not found. Install langchain-google-genai or set USE_GEMINI=false")
+            raise
+    elif use_ollama:
         try:
             from langchain_ollama import ChatOllama
             model_name = os.getenv('OLLAMA_MODEL', 'llama3.2:latest')
@@ -58,7 +77,7 @@ def get_llm():
         # Use OpenAI ChatGPT
         api_key = os.getenv('OPENAI_API_KEY')
         if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable is required when USE_OLLAMA=false")
+            raise ValueError("OPENAI_API_KEY environment variable is required when USE_OLLAMA=false and USE_GEMINI=false")
         
         return ChatOpenAI(
             api_key=api_key,
@@ -350,7 +369,7 @@ def run_scenario_step(step_description):
         try:
             # Execute browser instruction
             logger.info(f"Executing browser instruction: {step_description}")
-            browser_result = run_browser_instruction(step_description)
+            browser_result = run_browser_instruction(step_description, headless=False)
             
             if browser_result.get('status') == 'success':
                 success_message = f"✅ Browser instruction executed successfully: {step_description}"
