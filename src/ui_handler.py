@@ -318,27 +318,4 @@ def close_browser_session():
             _ui_handler = None
             
         except Exception as e:
-            logger.error(f"Error closing browser session: {str(e)}")
-
-
-# Additional utility functions for specific browser operations
-def run_browser_navigation(url: str, headless: bool = True) -> Dict[str, Any]:
-    """Navigate to a specific URL with fresh session"""
-    instruction = f"Navigate to {url}"
-    return run_browser_instruction(instruction, headless, fresh_session=True)
-
-
-def run_browser_form_fill(form_data: Dict[str, str], headless: bool = True) -> Dict[str, Any]:
-    """Fill form fields with provided data"""
-    form_instructions = []
-    for field, value in form_data.items():
-        form_instructions.append(f"Fill the {field} field with '{value}'")
-    
-    instruction = " and ".join(form_instructions)
-    return run_browser_instruction(instruction, headless)
-
-
-def run_browser_click(element_description: str, headless: bool = True) -> Dict[str, Any]:
-    """Click on a specific element"""
-    instruction = f"Click on {element_description}"
-    return run_browser_instruction(instruction, headless) 
+            logger.error(f"Error closing browser session: {str(e)}") 
