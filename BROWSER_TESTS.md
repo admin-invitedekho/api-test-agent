@@ -66,7 +66,7 @@ python test_fresh_session.py
 
 - Works with existing Behave test framework
 - AI routing between API and browser automation
-- Centralized step handler in `enhanced_steps.py`
+- Centralized step handler in `ai_steps.py`
 
 ## Cleanup Notes
 

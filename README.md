@@ -25,7 +25,7 @@ api-test-agent/
 ├── features/                 # Gherkin feature files
 │   ├── invitedekho_login_tests.feature # Login API test scenarios
 │   └── steps/               # Step definitions
-│       └── enhanced_steps.py # AI-powered step handler
+│       └── ai_steps.py # AI-powered step handler
 ├── src/
 │   ├── agent.py             # Main AI agent logic
 │   ├── api_tools.py         # API interaction tools
