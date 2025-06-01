@@ -1,623 +1,154 @@
 # AI Agent Usage Guide for API Testing
 
-This document provides comprehensive instructions for the AI agent to properly execute BDD scenarios by interacting with APIs using the provided tools.
-
 ## Available API Tools
-
-The agent has access to four primary API interaction tools:
 
 ### 1. `get_api(endpoint, params=None)`
 
-**Purpose**: Execute GET requests to retrieve data from API endpoints.
+Execute GET requests to retrieve data.
 
-**Parameters**:
-
-- `endpoint` (required): The API endpoint path (e.g., "/users/1", "/posts")
-- `params` (optional): Dictionary of query parameters
-
-**Usage Examples**:
-
-```python
-# Simple GET request
-get_api(endpoint="/users/1")
-
-# GET request with query parameters
-get_api(endpoint="/users", params={"page": 1, "limit": 10})
-```
+**Example**: `get_api(endpoint="/users/1", params={"page": 1})`
 
 ### 2. `post_api(endpoint, data)`
 
-**Purpose**: Execute POST requests to create new resources.
+Execute POST requests to create resources. **`data` parameter is REQUIRED**.
 
-**Parameters**:
-
-- `endpoint` (required): The API endpoint path (e.g., "/users", "/posts")
-- `data` (required): Dictionary containing the JSON payload to send
-
-**Critical Note**: The `data` parameter is REQUIRED for all POST requests.
-
-**Usage Examples**:
-
-```python
-# Create a new user
-post_api(endpoint="/users", data={"name": "John Doe", "email": "john@email.com"})
-
-# Create a new post
-post_api(endpoint="/posts", data={"title": "Test Post", "body": "Content", "userId": 1})
-```
+**Example**: `post_api(endpoint="/users", data={"name": "John", "email": "john@email.com"})`
 
 ### 3. `put_api(endpoint, data)`
 
-**Purpose**: Execute PUT requests to update existing resources.
+Execute PUT requests to update resources. **`data` parameter is REQUIRED**.
 
-**Parameters**:
-
-- `endpoint` (required): The API endpoint path (e.g., "/users/1", "/posts/5")
-- `data` (required): Dictionary containing the JSON payload for the update
-
-**Critical Note**: The `data` parameter is REQUIRED for all PUT requests.
-
-**Usage Examples**:
-
-```python
-# Update user information
-put_api(endpoint="/users/1", data={"name": "Updated Name", "email": "updated@email.com"})
-
-# Update a post
-put_api(endpoint="/posts/1", data={"title": "Updated Title", "body": "Updated content"})
-```
+**Example**: `put_api(endpoint="/users/1", data={"name": "Updated Name"})`
 
 ### 4. `delete_api(endpoint)`
 
-**Purpose**: Execute DELETE requests to remove resources.
+Execute DELETE requests to remove resources.
 
-**Parameters**:
+**Example**: `delete_api(endpoint="/users/1")`
 
-- `endpoint` (required): The API endpoint path (e.g., "/users/1", "/posts/5")
+## ⚠️ CRITICAL RULES
 
-**Usage Examples**:
+### 1. NO API Availability Checks
 
-```python
-# Delete a user
-delete_api(endpoint="/users/1")
-
-# Delete a post
-delete_api(endpoint="/posts/5")
-```
-
-## ⚠️ CRITICAL: API Availability Checks - DO NOT PERFORM
-
-**IMPORTANT RULE**: Never perform API availability checks or health checks.
-
-### What NOT to do:
-
-- **NEVER** make GET requests to base URLs to "check if API is available"
-- **NEVER** perform health checks or ping operations
-- **NEVER** make unnecessary requests to verify API connectivity
-
-### Steps to SKIP/IGNORE (treat as informational only):
-
-These types of step descriptions should be acknowledged but NO API calls should be made:
+**NEVER** perform health checks or availability verifications. For steps like:
 
 - `"Given the API is available at [URL]"`
-- `"Given the [service] API is accessible"`
-- `"Given the API endpoint is reachable"`
-- `"Given the system is available"`
 - `"Given the service is running"`
 
-### Correct Response for Availability Steps:
+Respond with: _"Acknowledged that the API is available at [URL]. Proceeding with test operations."_
 
-When encountering API availability steps, respond with:
+### 2. Always Use Complete URLs
 
-```
-"Acknowledged that the API is available at [URL]. No availability check needed - proceeding with actual test operations."
-```
+**NEVER** use relative paths. Always construct complete URLs:
 
-### Why This Rule Exists:
+**CORRECT**: `https://api.stage.invitedekho.com/login`
+**WRONG**: `/login`
 
-1. **Security**: Many APIs return 403/401 for base URL requests
-2. **Efficiency**: Availability checks are unnecessary overhead
-3. **Reliability**: Focus on actual functional testing, not connectivity
-4. **Best Practice**: Assume API availability and test actual functionality
+**InviteDeKho URLs**:
 
-### Example Handling:
+- Base: `https://api.stage.invitedekho.com`
+- Login: `https://api.stage.invitedekho.com/login`
 
-**Input Step**: `"Given the InviteDeKho API is available at https://api.stage.invitedekho.com"`
+### 3. POST/PUT Data Requirements
 
-**Correct Response**:
+Always include `data` parameter for POST and PUT requests:
 
-```
-"Acknowledged that the InviteDeKho API is available at https://api.stage.invitedekho.com. Proceeding with API testing operations."
-```
+**CORRECT**: `post_api(endpoint="...", data={"email": "...", "password": "..."})`
+**WRONG**: `post_api(endpoint="...")` ❌ Will cause ValidationError
 
-**WRONG Response**: Making a GET request to `https://api.stage.invitedekho.com`
+### 4. Step Type Understanding
 
-## ⚠️ CRITICAL: URL Construction Rules
+#### "Given" Steps - Setup/Context
 
-**IMPORTANT RULE**: Always use complete URLs based on loaded API contracts.
+**Action**: Acknowledge only, usually no API calls
+**Example**: `"Given the API is available"` → Acknowledge setup
 
-### URL Construction Guidelines:
+#### "When" Steps - Actions
 
-1. **NEVER use relative paths** like `/login`, `/users`, etc.
-2. **ALWAYS use complete URLs** from the API contracts
-3. **Extract base URL from API availability steps** when present
-4. **Combine base URL with endpoint paths** to create complete URLs
+**Action**: Make API calls using tools
+**Example**: `"When I login with email..."` → Use `post_api`
 
-### API Contract Reference:
+#### "Then"/"And" Steps - Assertions
 
-Based on the loaded InviteDeKho API contracts:
+**Action**: Examine PREVIOUS responses, DO NOT make new API calls
+**Example**: `"Then I should receive error response"` → Check previous API response
 
-- **Base URL**: `https://api.stage.invitedekho.com`
-- **Login Endpoint**: `https://api.stage.invitedekho.com/login`
+## Quick Reference
 
-### URL Construction Examples:
-
-**CORRECT URL Usage:**
+### Login Step Processing
 
 ```python
-# For InviteDeKho login
-post_api(endpoint="https://api.stage.invitedekho.com/login", data={"email": "...", "password": "..."})
-
-# For JSONPlaceholder (if used)
-get_api(endpoint="https://jsonplaceholder.typicode.com/users/1")
-```
-
-**WRONG URL Usage:**
-
-```python
-# These will cause "AI should provide complete URL" errors
-post_api(endpoint="/login", data={"email": "...", "password": "..."})
-get_api(endpoint="/users/1")
-```
-
-### Step Context Awareness:
-
-When processing login steps:
-
-1. **Identify the API context** from previous availability steps
-2. **Use the appropriate base URL** for that API
-3. **Construct complete endpoint URLs** by combining base URL + path
-
-**Example Context Processing:**
-
-- Previous step: `"Given the InviteDeKho API is available at https://api.stage.invitedekho.com"`
-- Current step: `"When I login with email... and password..."`
-- **Correct endpoint**: `https://api.stage.invitedekho.com/login`
-- **NOT**: `/login`
-
-## Critical Parsing Instructions for POST and PUT Requests
-
-When processing BDD step descriptions that contain JSON data, follow these exact steps:
-
-### Step-by-Step JSON Extraction Process
-
-#### Example 1: POST Request
-
-**Input**: `"POST /users with JSON data: {\"name\": \"John\", \"email\": \"john@email.com\"}"`
-
-**Processing Steps**:
-
-1. **Extract endpoint**: "/users"
-2. **Identify JSON data**: Everything after "JSON data:" → `{\"name\": \"John\", \"email\": \"john@email.com\"}`
-3. **Parse JSON string to dictionary**: `{"name": "John", "email": "john@email.com"}`
-4. **Execute tool call**: `post_api(endpoint="/users", data={"name": "John", "email": "john@email.com"})`
-
-#### Example 2: PUT Request
-
-**Input**: `"PUT /users/1 with JSON data: {\"name\": \"Updated Name\", \"status\": \"active\"}"`
-
-**Processing Steps**:
-
-1. **Extract endpoint**: "/users/1"
-2. **Identify JSON data**: Everything after "JSON data:" → `{\"name\": \"Updated Name\", \"status\": \"active\"}`
-3. **Parse JSON string to dictionary**: `{"name": "Updated Name", "status": "active"}`
-4. **Execute tool call**: `put_api(endpoint="/users/1", data={"name": "Updated Name", "status": "active"})`
-
-#### Example 3: Simple GET Request
-
-**Input**: `"GET /users/1"`
-
-**Processing Steps**:
-
-1. **Extract endpoint**: "/users/1"
-2. **Execute tool call**: `get_api(endpoint="/users/1")`
-
-#### Example 4: GET with Parameters
-
-**Input**: `"GET /users with parameters page=1&limit=5"`
-
-**Processing Steps**:
-
-1. **Extract endpoint**: "/users"
-2. **Parse parameters**: `{"page": 1, "limit": 5}`
-3. **Execute tool call**: `get_api(endpoint="/users", params={"page": 1, "limit": 5})`
-
-## Common Parsing Patterns
-
-### JSON Data Extraction Keywords
-
-Look for these patterns in step descriptions:
-
-- "with JSON data:"
-- "with data:"
-- "with payload:"
-- "with body:"
-
-### Parameter Extraction Keywords
-
-Look for these patterns for GET request parameters:
-
-- "with parameters"
-- "with query parameters"
-- "with params"
-
-## Error Handling Guidelines
-
-### Tool Response Structure
-
-Each tool returns a dictionary with the following structure:
-
-```python
-{
-    "curl_command": "curl -X GET ...",  # Equivalent curl command
-    "tool_name": "get_api",             # Name of the tool used
-    "endpoint": "/users/1",             # Endpoint that was called
-    "status_code": 200,                 # HTTP status code
-    "body": "response text",            # Raw response body
-    "json_response": {...},             # Parsed JSON response (if available)
-    "error": None                       # Error message (if any)
-}
-```
-
-### Success vs. Failure Detection
-
-- **Success**: `error` field is None or empty, and `status_code` is in 2xx range
-- **Failure**: `error` field contains error message, or `status_code` is 4xx/5xx
-
-### Error Response Handling
-
-When an error occurs:
-
-1. The tool will still return a response dictionary
-2. The `error` field will contain the error message
-3. Status code and response body (if available) will still be provided
-4. The agent should report the error details to help with debugging
-
-## Agent Response Guidelines
-
-### When Successful
-
-- Confirm the action was completed
-- Report key details from the response (status code, important data)
-- Mention the equivalent curl command if relevant
-
-### When Failed
-
-- Clearly state what went wrong
-- Include the error message and status code
-- Suggest potential solutions if applicable
-
-### Example Responses
-
-**Successful GET**:
-
-```
-Successfully retrieved user data from /users/1. Response status: 200.
-The user data includes: name="John Doe", email="john@example.com", id=1.
-```
-
-**Successful POST**:
-
-```
-Successfully created a new user at /users. Response status: 201.
-The new user was assigned ID: 11 and contains the data: name="John Doe", email="john@example.com".
-```
-
-**Failed Request**:
-
-```
-Failed to retrieve data from /users/999. Response status: 404.
-Error: Not Found. The requested user does not exist.
-```
-
-## Base URL Configuration
-
-The current base URL is set to: `https://jsonplaceholder.typicode.com`
-
-This is a free testing API that provides realistic responses for:
-
-- `/users` - User management
-- `/posts` - Blog posts
-- `/comments` - Post comments
-- `/albums` - Photo albums
-- `/photos` - Individual photos
-- `/todos` - Todo items
-
-## Important Reminders
-
-1. **Always include the `data` parameter for POST and PUT requests** - Never call these tools with only the endpoint parameter
-2. **Parse JSON strings carefully** - Convert escaped JSON strings into proper Python dictionaries
-3. **Handle both success and error responses** - Tools return structured data in both cases
-4. **Use descriptive language** - Help users understand what happened and why
-5. **Include relevant details** - Status codes, error messages, and key response data are important for debugging
-
-## Troubleshooting Common Issues
-
-### Issue: "ValidationError for post_api missing data field"
-
-**Cause**: Calling `post_api` or `put_api` without the required `data` parameter
-**Solution**: Always extract and include the JSON data when making POST/PUT requests
-
-### Issue: "Agent indicated failure in its final output"
-
-**Cause**: The agent responded with phrases like "I cannot" or "failed to"
-**Solution**: Review the step description and ensure it matches available tool capabilities
-
-### Issue: JSON parsing errors
-
-**Cause**: Malformed JSON in the step description
-**Solution**: Validate JSON syntax and handle escaped quotes properly
-
-### Issue: 404 Not Found errors
-
-**Cause**: Requesting resources that don't exist on the test API
-**Solution**: Use valid resource IDs (1-10 for users, 1-100 for posts on JSONPlaceholder)
-
-## Critical HTTP Method Selection Rules
-
-### ⚠️ MANDATORY: Use Methods Specified in API Contracts
-
-**CRITICAL RULE**: Always use the HTTP method specified in the loaded API contracts for each operation.
-
-### Method Selection from API Contracts
-
-**ALWAYS refer to the loaded API contracts** to determine the correct HTTP method:
-
-1. **Check the API contract documentation** for the specific endpoint
-2. **Use the exact method specified** in the contract (GET, POST, PUT, DELETE)
-3. **Do not assume methods** based on operation names
-
-### API Contract Reference Process:
-
-**Step 1**: Identify the operation from the step description
-**Step 2**: Look up the endpoint in the loaded API contracts  
-**Step 3**: Use the HTTP method specified in the contract
-**Step 4**: Include required parameters as specified in the contract
-
-### InviteDeKho API Contract Examples:
-
-Based on the loaded API contracts:
-
-- **Login Endpoint**: Use the method specified in the InviteDeKho API contract for `/login`
-- **Other endpoints**: Always refer to contract specifications
-
-**CORRECT Method Selection Process:**
-
-```python
-# 1. Check API contract for /login endpoint
-# 2. Use the method specified in the contract
-# 3. Include required data fields from contract
-
-# Example based on contract specifications:
+# Step: "When I login with email 'user@example.com' and password 'pass123'"
 post_api(
     endpoint="https://api.stage.invitedekho.com/login",
-    data={
-        "email": "user@example.com",
-        "password": "password123"
-    }
+    data={"email": "user@example.com", "password": "pass123"}
 )
 ```
 
-### HTTP Method Guidelines by Operation:
-
-1. **POST Method** (`post_api`) - Use when contract specifies POST for:
-
-   - Authentication operations (if specified as POST in contract)
-   - Creating resources
-   - Submitting data with request body
-
-2. **GET Method** (`get_api`) - Use when contract specifies GET for:
-
-   - Retrieving data
-   - Reading information
-   - No request body needed
-
-3. **PUT Method** (`put_api`) - Use when contract specifies PUT for:
-
-   - Updating entire resources
-   - Complete resource replacement
-
-4. **DELETE Method** (`delete_api`) - Use when contract specifies DELETE for:
-   - Removing resources
-
-### Contract-Based Step Analysis:
-
-**For login/authentication steps:**
-
-- **Step pattern**: `"When I login with email... and password..."`
-- **Action**: Look up `/login` endpoint in loaded API contracts
-- **Method**: Use the HTTP method specified in the contract documentation
-- **Data**: Include required fields as specified in the contract
-
-**For other operations:**
-
-- **Always reference the API contract** for the specific endpoint
-- **Use the method specified** in the contract documentation
-- **Include required fields** as documented in the contract
-
-## ⚠️ CRITICAL: Data Parameter Requirements
-
-**MANDATORY RULE**: Always include the `data` parameter for POST and PUT requests.
-
-### POST and PUT Tool Usage:
-
-- **post_api(endpoint, data)** - `data` parameter is REQUIRED
-- **put_api(endpoint, data)** - `data` parameter is REQUIRED
-- **NEVER call these tools with only endpoint parameter**
-
-### Data Extraction from Steps:
-
-When processing login steps, extract email and password values:
-
-**Step Example**: `"When I try to login with invalid email "wrong@email.com" and password "Test@123456""`
-
-**Correct Tool Call**:
+### Assertion Step Processing
 
 ```python
-post_api(
-    endpoint="https://api.stage.invitedekho.com/login",
-    data={
-        "email": "wrong@email.com",
-        "password": "Test@123456"
-    }
-)
+# Step: "Then I should receive authentication error"
+# Action: Check previous API response - NO new API call
+# Response: "Previous login returned status 400 with error message..."
 ```
 
-**WRONG Tool Call**:
+### JSON Data Extraction
 
-```python
-# This will cause ValidationError - missing data parameter
-post_api(endpoint="https://api.stage.invitedekho.com/login")
-```
+Extract data from steps containing:
 
-## ⚠️ CRITICAL: Step Type Understanding
+- "with JSON data: {...}"
+- "with data: {...}"
+- "with payload: {...}"
 
-**MANDATORY RULE**: Different step types require completely different actions.
+Parse JSON strings to dictionaries before passing to tools.
 
-### Step Classification and Actions:
+## Response Guidelines
 
-#### 1. **"Given" Steps** - Setup/Context
-
-- **Purpose**: Establish test context and preconditions
-- **Action**: Acknowledge setup, usually NO API calls
-- **Examples**:
-  - `"Given the API is available at [URL]"` → Acknowledge only
-  - `"Given the system is ready"` → Acknowledge only
-
-#### 2. **"When" Steps** - Actions
-
-- **Purpose**: Perform the actual operation being tested
-- **Action**: Make API calls using appropriate tools
-- **Examples**:
-  - `"When I login with email... and password..."` → Use post_api
-  - `"When I try to login with invalid..."` → Use post_api
-  - `"When I successfully login with..."` → Use post_api
-
-#### 3. **"Then" Steps** - Assertions
-
-- **Purpose**: Verify the results of previous "When" actions
-- **Action**: **EXAMINE PREVIOUS RESPONSES** - DO NOT make new API calls
-- **Examples**:
-  - `"Then I should receive an authentication error response"` → Check previous API response
-  - `"Then I should receive a successful authentication response"` → Check previous API response
-  - `"Then the system should handle..."` → Analyze previous response
-
-#### 4. **"And" Steps** - Additional Assertions
-
-- **Purpose**: Additional verification of previous actions
-- **Action**: **EXAMINE PREVIOUS RESPONSES** - DO NOT make new API calls
-- **Examples**:
-  - `"And the error should indicate invalid credentials"` → Check previous error message
-  - `"And the response should contain a valid JWT token"` → Check previous response data
-  - `"And I extract the JWT token from the response"` → Extract from previous response
-
-### 🚨 **CRITICAL RULE FOR ASSERTION STEPS**
-
-**For ALL "Then" and "And" steps:**
-
-✅ **CORRECT Action**:
+### Success Response
 
 ```
-1. Look at the LAST API call that was made
-2. Examine its status code, response body, and error messages
-3. Determine if the assertion passes or fails based on that data
-4. Provide a clear summary of the verification result
+"Successfully [action] at [endpoint]. Status: [code].
+Key details: [relevant response data]"
 ```
 
-❌ **WRONG Action**:
+### Error Response
 
 ```
-1. Making a new API call with post_api, get_api, etc.
-2. Calling any tool that makes HTTP requests
-3. Ignoring previous response data
+"Failed to [action] at [endpoint]. Status: [code].
+Error: [error message]"
 ```
 
-### **Detailed Examples:**
-
-#### Example 1: Authentication Error Assertion
-
-**Previous Step**: `When I try to login with invalid email "wrong@email.com" and password "Test@123456"`
-**Previous Response**: `Status: 400, Body: {"success": false, "message": "No value present"}`
-
-**Assertion Step**: `"Then I should receive an authentication error response"`
-
-**CORRECT Response**:
+### Assertion Response
 
 ```
-"Based on the previous login attempt:
-- Status Code: 400 (indicates client error)
-- Response: {"success": false, "message": "No value present"}
-- This confirms an authentication error response was received as expected."
+"Previous [action] result: Status [code] with [details].
+This [confirms/indicates] [assertion result]."
 ```
 
-**WRONG Response**: Making a new post_api call
+## Common Patterns
 
-#### Example 2: JWT Token Extraction
+### Login Variations
 
-**Previous Step**: `When I successfully login with valid credentials "admin@invitedekho.com" and "Test@123456"`
-**Previous Response**: `Status: 200, Body: {"jwtToken": "eyJhbGciOiJIUzI1..."}`
+- `"When I login..."` → POST to login endpoint with credentials
+- `"When I try to login with invalid..."` → POST with provided invalid data
+- `"When I attempt to login..."` → POST with specified parameters
 
-**Assertion Step**: `"And I extract the JWT token from the response"`
+### Error Testing
 
-**CORRECT Response**:
+- `"Then I should receive error response"` → Check previous response status/message
+- `"And error should indicate [type]"` → Verify previous error message content
 
-```
-"JWT Token extracted from the previous login response:
-Token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI5NDEyODE3NjY3...
-The token is present and properly formatted."
-```
+### Security Testing
 
-**WRONG Response**: Making a new post_api call
+- SQL injection attempts → POST with malicious data, expect proper error handling
+- Oversized input → POST with large payload, expect validation errors
 
-#### Example 3: Success Response Verification
+## Troubleshooting
 
-**Previous Step**: `When I login to InviteDeKho with email "admin@invitedekho.com" and password "Test@123456"`
-**Previous Response**: `Status: 200, Body: {"jwtToken": "eyJhbGciOiJIUzI1..."}`
-
-**Assertion Step**: `"Then I should receive a successful authentication response"`
-
-**CORRECT Response**:
-
-```
-"The previous login attempt was successful:
-- Status Code: 200 (success)
-- Response contains JWT token
-- Authentication was completed successfully as expected."
-```
-
-**WRONG Response**: Making a new post_api call
-
-### **Step Pattern Recognition:**
-
-**Keywords that indicate ASSERTION steps (examine previous responses):**
-
-- "should receive", "should contain", "should indicate"
-- "should be able to", "should have"
-- "extract", "verify", "check", "validate"
-- "the response should", "the error should", "the token should"
-- "the system should handle", "should be properly"
-
-**Keywords that indicate ACTION steps (make API calls):**
-
-- "I login", "I try to login", "I attempt"
-- "I send", "I submit", "I create"
-- "I update", "I delete", "I retrieve"
-
-### **Context Awareness for Assertions:**
-
-When processing assertion steps, ALWAYS:
-
-1. **Reference the most recent API call** and its results
-2. **Use specific data** from the previous response (status codes, messages, tokens)
-3. **Provide clear pass/fail determination** based on that data
-4. **Quote actual response values** to show verification was performed
+| Error                        | Cause                 | Solution                            |
+| ---------------------------- | --------------------- | ----------------------------------- |
+| ValidationError missing data | POST/PUT without data | Always include data parameter       |
+| Agent failure output         | Wrong action type     | Check step type (Given/When/Then)   |
+| 404 Not Found                | Invalid endpoint      | Use complete URLs from contracts    |
+| JSON parsing error           | Malformed JSON        | Validate and escape quotes properly |

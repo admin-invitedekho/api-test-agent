@@ -50,7 +50,7 @@ Feature: InviteDeKho Login API Testing
 
   Scenario: API endpoint failure testing
     Given the API is available at https://api.stage.invitedekho.com
-    When I try to login using a non-existent endpoint "/api/v999/nonexistent/login"
+    When I make a POST request to "https://api.stage.invitedekho.com/api/v999/nonexistent/login" with data {"email": "test@example.com", "password": "testpass"}
     Then the system should return a 404 not found error
     And the error response should be properly formatted
     And the logs should show the failed API call attempt
