@@ -1,6 +1,6 @@
 # features/steps/enhanced_steps.py
 """
-Enhanced AI-powered step definitions for API testing
+Unified AI-powered step definitions for both API and browser automation
 """
 
 import sys
@@ -14,35 +14,55 @@ sys.path.insert(0, src_path)
 
 from ai_step_handler import AIStepHandler
 
+# Global step handler instance
+step_handler = AIStepHandler()
 
 @step(u'{step_text}')
-def universal_ai_step(context, step_text):
+def universal_step_handler(context, step_text):
     """
-    Universal AI-powered step that can handle any step definition using LLM
+    Single universal step definition that handles ALL instruction patterns.
+    Supports any natural language instruction and automatically routes to API or browser automation.
+    
+    Examples:
+    - "I navigate to https://example.com"
+    - "click the Login button" 
+    - "get user data from API"
+    - "verify we are on the profile page"
     """
-    try:
-        # Initialize AI handler if not exists
-        if not hasattr(context, 'ai_handler'):
-            context.ai_handler = AIStepHandler()
-        
-        # Initialize results list if not exists
-        if not hasattr(context, 'ai_results'):
-            context.ai_results = []
-        
-        # Process the step with AI
-        result = context.ai_handler.process_step(step_text, context)
-        
-        # Store the result
-        context.ai_results.append(result)
-        
-        # Check if the step was successful
+    result = step_handler.step_handler(step_text)
+    context.last_result = result
+    
+    # Store result details for debugging
+    context.last_instruction = step_text
+    context.last_action_type = result.get('action_type', 'unknown')
+    context.last_status = result.get('status', 'unknown')
+    
+    # Initialize results list if not exists
+    if not hasattr(context, 'ai_results'):
+        context.ai_results = []
+    context.ai_results.append(result)
+    
+    # For verification steps, accept both success and info status
+    if step_text.startswith(('verify', 'check', 'ensure', 'confirm')):
+        acceptable_statuses = ['success', 'info']
+    else:
+        acceptable_statuses = ['success']
+    
+    if result['status'] not in acceptable_statuses:
+        error_msg = result.get('error', 'Unknown error')
+        raise AssertionError(f"Step failed: '{step_text}' - {error_msg}")
+    
+    print(f"✅ AI Step executed successfully: {step_text}")
+
+# Hook for better debugging and logging
+def after_step(context, step):
+    """Hook to log step execution details."""
+    if hasattr(context, 'last_result'):
+        result = context.last_result
+        print(f"\n📝 Step: {step.name}")
+        print(f"🔧 Action Type: {result.get('action_type', 'unknown')}")
+        print(f"📊 Status: {result.get('status', 'unknown')}")
         if result.get('status') == 'error':
-            error_msg = result.get('error', 'Unknown error occurred')
-            raise AssertionError(f"Step failed: {error_msg}")
-        
-        print(f"✅ AI Step executed successfully: {step_text}")
-        
-    except Exception as e:
-        print(f"❌ AI Step failed: {step_text}")
-        print(f"Error: {str(e)}")
-        raise
+            print(f"❌ Error: {result.get('error', 'Unknown error')}")
+        else:
+            print(f"✅ Result: {result.get('result', 'Success')}")
