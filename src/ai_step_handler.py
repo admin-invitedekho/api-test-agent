@@ -16,20 +16,203 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from agent import run_scenario_step, AgentProcessingError
 from ai_schema_validator import create_ai_validator
+from ui_handler import run_browser_instruction, is_browser_instruction, close_browser_session
 
 
 class AIStepHandler:
-    """Enhanced AI step handler with AI-powered schema validation"""
+    """Enhanced AI step handler with AI-powered schema validation and browser automation"""
     
-    def __init__(self, llm=None, agent=None):
+    def __init__(self, llm=None, agent=None, headless_browser=True):
         """Initialize the AI step handler"""
         self.llm = llm
         self.agent = agent
+        self.headless_browser = headless_browser
         self.context_history = []
         self.response_history = []
         # Initialize AI-powered validator if agent is available
         self.ai_validator = create_ai_validator(agent) if agent else None
     
+    def ai_decide_tool(self, step_text: str) -> str:
+        """
+        AI-powered decision making to determine if a step requires API or browser automation.
+        
+        Args:
+            step_text (str): The natural language step text
+            
+        Returns:
+            str: 'api' or 'browser' based on the step analysis
+        """
+        # First check using pattern matching for common browser actions
+        if is_browser_instruction(step_text):
+            return 'browser'
+        
+        # Check for explicit API patterns
+        api_patterns = [
+            'api', 'endpoint', 'post', 'get', 'put', 'delete', 'patch',
+            'json', 'response', 'status code', 'http', 'request'
+        ]
+        
+        step_lower = step_text.lower()
+        for pattern in api_patterns:
+            if pattern in step_lower:
+                return 'api'
+        
+        # Check for login patterns - could be either browser or API
+        # For now, default login to API unless specifically browser-oriented
+        if 'login' in step_lower:
+            browser_login_indicators = [
+                'page', 'form', 'field', 'button', 'click', 'enter', 'type'
+            ]
+            for indicator in browser_login_indicators:
+                if indicator in step_lower:
+                    return 'browser'
+            return 'api'  # Default login to API
+        
+        # Advanced AI-based classification could be added here
+        # For now, use heuristics
+        
+        # If step mentions navigation, interaction, or visual elements
+        ui_indicators = [
+            'navigate', 'browse', 'page', 'click', 'button', 'link',
+            'form', 'field', 'enter', 'type', 'select', 'dropdown',
+            'scroll', 'wait', 'see', 'verify on page', 'element',
+            'window', 'tab', 'popup', 'modal', 'dialog'
+        ]
+        
+        for indicator in ui_indicators:
+            if indicator in step_lower:
+                return 'browser'
+        
+        # Default to API if unclear
+        return 'api'
+    
+    def step_handler(self, step_text: str) -> Dict[str, Any]:
+        """
+        Unified step handler that routes between API and browser automation.
+        
+        This is the main function that replaces individual step definitions.
+        
+        Args:
+            step_text (str): Natural language step description
+            
+        Returns:
+            Dict containing execution results
+        """
+        try:
+            # Determine action type using AI decision logic
+            action_type = self.ai_decide_tool(step_text)
+            
+            result = {
+                "status": "success",
+                "step_text": step_text,
+                "action_type": action_type,
+                "timestamp": None
+            }
+            
+            if action_type == 'api':
+                # Route to API handler
+                api_result = self._run_api_instruction(step_text)
+                result.update(api_result)
+                
+            elif action_type == 'browser':
+                # Route to browser handler
+                browser_result = self._run_browser_instruction(step_text)
+                result.update(browser_result)
+                
+            else:
+                result["status"] = "error"
+                result["error"] = f"Unknown action type: {action_type}"
+            
+            # Store in history
+            self.context_history.append(step_text)
+            self.response_history.append(result)
+            
+            return result
+            
+        except Exception as e:
+            error_result = {
+                "status": "error",
+                "step_text": step_text,
+                "error": f"Step handler error: {str(e)}"
+            }
+            self.response_history.append(error_result)
+            return error_result
+    
+    def _run_api_instruction(self, step_text: str) -> Dict[str, Any]:
+        """
+        Execute API instruction using existing agent.
+        
+        Args:
+            step_text (str): Natural language API instruction
+            
+        Returns:
+            Dict containing API execution results
+        """
+        try:
+            # Use existing API processing logic
+            agent_response = run_scenario_step(step_text)
+            
+            # Extract relevant information from agent response
+            tool_execution = agent_response.get('tool_execution', {}) if isinstance(agent_response, dict) else {}
+            
+            return {
+                "agent_response": agent_response,
+                "method": self._extract_method(agent_response),
+                "url": self._extract_url(agent_response),
+                "status_code": tool_execution.get('status_code'),
+                "response_data": tool_execution.get('json_response'),
+                "execution_type": "api"
+            }
+            
+        except AgentProcessingError as e:
+            return {
+                "status": "error",
+                "error": f"API execution error: {str(e)}",
+                "execution_type": "api"
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"Unexpected API error: {str(e)}",
+                "execution_type": "api"
+            }
+    
+    def _run_browser_instruction(self, step_text: str) -> Dict[str, Any]:
+        """
+        Execute browser instruction using UI handler.
+        
+        Args:
+            step_text (str): Natural language browser instruction
+            
+        Returns:
+            Dict containing browser execution results
+        """
+        try:
+            # Execute browser instruction
+            browser_result = run_browser_instruction(step_text, headless=self.headless_browser)
+            
+            return {
+                "browser_result": browser_result,
+                "success": browser_result.get("success", False),
+                "message": browser_result.get("message", ""),
+                "screenshot": browser_result.get("screenshot"),
+                "execution_type": "browser"
+            }
+            
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"Browser execution error: {str(e)}",
+                "execution_type": "browser"
+            }
+    
+    def cleanup(self):
+        """Clean up resources including browser sessions."""
+        try:
+            close_browser_session()
+        except Exception as e:
+            logging.error(f"Error during cleanup: {e}")
+
     def parse_api_call(self, step_description: str) -> Tuple[Optional[str], Optional[str], Optional[Dict], Optional[Dict]]:
         """
         Parse step description to extract API call details
@@ -97,7 +280,8 @@ class AIStepHandler:
     
     def process_step(self, step_text: str, table_data=None) -> Dict[str, Any]:
         """
-        Process a BDD step using AI
+        Process a BDD step using AI - LEGACY METHOD for backward compatibility
+        Use step_handler() for new implementations
         
         Args:
             step_text: The natural language step text
@@ -106,48 +290,7 @@ class AIStepHandler:
         Returns:
             Dict containing step execution results
         """
-        try:
-            # Execute the step using the AI agent
-            agent_response = run_scenario_step(step_text)
-            
-            # Extract relevant information from agent response
-            tool_execution = agent_response.get('tool_execution', {}) if isinstance(agent_response, dict) else {}
-            
-            result = {
-                "status": "success",
-                "step_text": step_text,
-                "agent_response": agent_response,
-                "method": self._extract_method(agent_response),
-                "url": self._extract_url(agent_response),
-                "status_code": tool_execution.get('status_code'),
-                "response_data": tool_execution.get('json_response')
-            }
-            
-            # If this was an API call, validate response schema
-            if result["status_code"] and result["response_data"]:
-                endpoint = tool_execution.get('endpoint', '')
-                method = tool_execution.get('tool_name', '').replace('_api', '').upper()
-                if endpoint and method:
-                    self.validate_response_after_execution(endpoint, method, result["response_data"])
-            
-            # Store in history
-            self.context_history.append(step_text)
-            self.response_history.append(result)
-            
-            return result
-            
-        except AgentProcessingError as e:
-            return {
-                "status": "error",
-                "step_text": step_text,
-                "error": str(e)
-            }
-        except Exception as e:
-            return {
-                "status": "error",
-                "step_text": step_text,
-                "error": f"Unexpected error: {str(e)}"
-            }
+        return self.step_handler(step_text)
     
     def _extract_method(self, agent_response) -> str:
         """Extract HTTP method from agent response"""
@@ -190,15 +333,21 @@ class AIStepHandler:
     
     def get_context_summary(self) -> Dict[str, Any]:
         """Get a summary of the current test context"""
+        api_steps = [r for r in self.response_history if r.get('execution_type') == 'api']
+        browser_steps = [r for r in self.response_history if r.get('execution_type') == 'browser']
+        
         return {
             "steps_executed": len(self.context_history),
-            "entities_created": len([r for r in self.response_history if r.get('method') in ['POST', 'PUT']]),
+            "api_steps": len(api_steps),
+            "browser_steps": len(browser_steps),
+            "entities_created": len([r for r in api_steps if r.get('method') in ['POST', 'PUT']]),
             "last_response": self.response_history[-1] if self.response_history else None
         }
     
     def execute_step(self, step_description: str) -> Dict[str, Any]:
         """
-        Enhanced step execution with schema validation
+        Enhanced step execution with schema validation - LEGACY METHOD
+        Use step_handler() for new implementations
         
         Args:
             step_description: Natural language step description
@@ -206,61 +355,7 @@ class AIStepHandler:
         Returns:
             Dict containing execution results and validation status
         """
-        try:
-            # Parse the step to extract API call details
-            method, endpoint, data, params = self.parse_api_call(step_description)
-            
-            if not method or not endpoint:
-                # Fall back to AI agent for non-standard steps
-                return self._execute_with_ai_agent(step_description)
-            
-            # Validate request data before execution
-            if method in ['POST', 'PUT'] and data:
-                is_valid, validation_error = self.validate_request_before_execution(method, endpoint, data)
-                if not is_valid:
-                    return {
-                        "status": "validation_error",
-                        "step_description": step_description,
-                        "method": method,
-                        "endpoint": endpoint,
-                        "validation_error": validation_error,
-                        "error": f"Request validation failed: {validation_error}"
-                    }
-            
-            # Execute with AI agent
-            response = run_scenario_step(step_description)
-            
-            # Validate response if available
-            if isinstance(response, dict) and 'json_response' in response:
-                response_data = response['json_response']
-                if response_data:
-                    is_valid, validation_error = self.validate_response_after_execution(endpoint, method, response_data)
-                    if not is_valid:
-                        response['response_validation_warning'] = validation_error
-            
-            # Add validation info to response
-            if isinstance(response, dict):
-                validation_insights = self.ai_validator.get_validation_insights(endpoint, method) if self.ai_validator else {}
-                response['schema_validation'] = {
-                    "request_validated": method in ['POST', 'PUT'],
-                    "response_validated": True,
-                    "validation_insights": validation_insights
-                }
-            
-            return response
-            
-        except ValueError as e:
-            return {
-                "status": "parsing_error", 
-                "step_description": step_description,
-                "error": str(e)
-            }
-        except Exception as e:
-            return {
-                "status": "execution_error",
-                "step_description": step_description, 
-                "error": f"Unexpected error: {str(e)}"
-            }
+        return self.step_handler(step_description)
     
     def _execute_with_ai_agent(self, step_description: str) -> Dict[str, Any]:
         """Execute step using AI agent without validation"""
