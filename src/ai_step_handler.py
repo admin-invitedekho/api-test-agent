@@ -4,6 +4,7 @@ AI Step Handler for processing natural language test steps
 import os
 import sys
 import logging
+import time
 from typing import Dict, Any, Tuple, Optional
 import json
 import re
@@ -16,6 +17,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from agent import run_scenario_step, AgentProcessingError, get_llm
 from ai_schema_validator import create_ai_validator
+from allure_logger import allure_logger
 
 # Import browser handler
 try:
@@ -249,6 +251,7 @@ class AIStepHandler:
     def run_api_instruction(self, step_text: str) -> Dict[str, Any]:
         """
         Execute an API-related instruction using the existing agent.
+        Now with comprehensive Allure logging.
         
         Args:
             step_text (str): The natural language step text
@@ -267,12 +270,24 @@ class AIStepHandler:
                     last_response = self.response_history[-1]
                     if last_response.get('response_data'):
                         token = self.extract_jwt_token(last_response['response_data'])
+                        
+                        # Log AI interaction for token extraction
+                        allure_logger.log_ai_interaction(
+                            prompt=f"Extract JWT token from previous response: {step_text}",
+                            output=f"Token extracted: {token[:20] + '...' if token else 'No token found'}"
+                        )
+                        
                         return {
                             "status": "success",
                             "action_type": "api",
                             "step_text": step_text,
                             "result": f"JWT token extracted and stored: {token[:20] + '...' if token else 'No token found'}"
                         }
+                
+                allure_logger.log_error(
+                    Exception("No previous login response found"),
+                    "Token extraction failed"
+                )
                 
                 return {
                     "status": "error",
@@ -284,11 +299,48 @@ class AIStepHandler:
             # Automatically detect authentication requirements based on endpoint patterns
             modified_step = self._enhance_step_with_authentication(step_text)
             
+            # Log the AI prompt being sent
+            allure_logger.log_ai_interaction(
+                prompt=modified_step,
+                output="Sending to AI agent for processing..."
+            )
+            
             # Execute the step using the AI agent (existing logic)
             agent_response = run_scenario_step(modified_step)
             
+            # Log AI response
+            allure_logger.log_ai_interaction(
+                prompt=modified_step,
+                output=str(agent_response)
+            )
+            
             # Extract relevant information from agent response
             tool_execution = agent_response.get('tool_execution', {}) if isinstance(agent_response, dict) else {}
+            
+            # Log API request details if available
+            if tool_execution:
+                method = self._extract_method(agent_response)
+                endpoint = tool_execution.get('endpoint', '')
+                headers = self._extract_headers(tool_execution)
+                body = tool_execution.get('data', {})
+                
+                if method and method != 'N/A':
+                    allure_logger.log_api_request(
+                        method=method,
+                        endpoint=endpoint,
+                        headers=headers,
+                        body=body
+                    )
+                
+                # Log API response details
+                status_code = tool_execution.get('status_code')
+                response_body = tool_execution.get('body', '')
+                
+                if status_code:
+                    allure_logger.log_api_response(
+                        status_code=status_code,
+                        response_body=response_body
+                    )
             
             result = {
                 "status": "success",
@@ -323,6 +375,7 @@ class AIStepHandler:
             return result
             
         except AgentProcessingError as e:
+            allure_logger.log_error(e, f"Agent processing error for step: {step_text}")
             return {
                 "status": "error",
                 "action_type": "api",
@@ -330,6 +383,7 @@ class AIStepHandler:
                 "error": str(e)
             }
         except Exception as e:
+            allure_logger.log_error(e, f"Unexpected error during API instruction: {step_text}")
             return {
                 "status": "error",
                 "action_type": "api",
@@ -378,6 +432,7 @@ class AIStepHandler:
     def run_browser_instruction_handler(self, step_text: str) -> Dict[str, Any]:
         """
         Execute a browser-related instruction using the browser handler.
+        Now with comprehensive Allure logging.
         
         Args:
             step_text (str): The natural language step text
@@ -386,16 +441,27 @@ class AIStepHandler:
             Dict[str, Any]: Result of the browser instruction execution
         """
         if not BROWSER_HANDLER_AVAILABLE:
+            error_msg = "Browser handler not available. Please ensure playwright-mcp is installed."
+            allure_logger.log_error(
+                Exception(error_msg),
+                f"Browser handler unavailable for step: {step_text}"
+            )
             return {
                 "status": "error",
                 "action_type": "browser",
                 "step_text": step_text,
-                "error": "Browser handler not available. Please ensure playwright-mcp is installed."
+                "error": error_msg
             }
         
         try:
             # Check if this is a mixed scenario and handle UI data capture
             routing_mode = self.get_scenario_routing_mode()
+            
+            # Log browser instruction
+            allure_logger.log_browser_instruction(
+                instruction=step_text,
+                response="Sending to Playwright MCP for processing..."
+            )
             
             # Handle UI data capture steps for mixed scenarios
             if routing_mode == 'mixed' and 'capture' in step_text.lower() and 'profile' in step_text.lower():
@@ -405,20 +471,34 @@ class AIStepHandler:
                 self.store_ui_data('name', 'Vibhor Goyal')  # Updated to match API response
                 self.store_ui_data('phone', '9412817667')  # Updated to match API response format
                 
+                ui_data_captured = {
+                    "email": "admin@invitedekho.com",
+                    "name": "Vibhor Goyal", 
+                    "phone": "9412817667"
+                }
+                
+                # Log the simulated UI data capture
+                allure_logger.log_browser_instruction(
+                    instruction=step_text,
+                    response=f"Simulated UI data capture: {ui_data_captured}"
+                )
+                
                 return {
                     "status": "success",
                     "action_type": "browser",
                     "step_text": step_text,
                     "result": "UI profile data captured successfully",
-                    "ui_data_captured": {
-                        "email": "admin@invitedekho.com",
-                        "name": "Vibhor Goyal", 
-                        "phone": "9412817667"
-                    }
+                    "ui_data_captured": ui_data_captured
                 }
             
             # Use the proper async wrapper from browser_handler
             result = run_browser_instruction(step_text)
+            
+            # Log browser response
+            allure_logger.log_browser_instruction(
+                instruction=step_text,
+                response=str(result)
+            )
             
             # Ensure the result has the correct format
             if isinstance(result, dict):
@@ -433,6 +513,7 @@ class AIStepHandler:
                 }
                 
         except Exception as e:
+            allure_logger.log_error(e, f"Browser execution error for step: {step_text}")
             return {
                 "status": "error",
                 "action_type": "browser",
@@ -443,6 +524,7 @@ class AIStepHandler:
     def step_handler(self, step_text: str) -> Dict[str, Any]:
         """
         Main step handler that routes between API and browser actions using tag-based routing.
+        Now with comprehensive Allure logging integration.
         
         Args:
             step_text (str): The natural language step text
@@ -450,13 +532,28 @@ class AIStepHandler:
         Returns:
             Dict[str, Any]: Result of the step execution
         """
+        start_time = time.time()
+        
         # Check for validation steps in mixed scenarios
         routing_mode = self.get_scenario_routing_mode()
         if routing_mode == 'mixed' and (step_text.strip().startswith('Then') or step_text.strip().startswith('And')):
-            result = self.handle_validation_step(step_text)
-            self.context_history.append(step_text)
-            self.response_history.append(result)
-            return result
+            # Start Allure step logging for validation
+            with allure_logger.start_step(step_text, "Validation"):
+                result = self.handle_validation_step(step_text)
+                execution_time = time.time() - start_time
+                
+                # Log validation details
+                allure_logger.log_ai_interaction(
+                    prompt=f"Validation step: {step_text}",
+                    output=str(result)
+                )
+                
+                success = result.get("status") != "error"
+                allure_logger.log_step_completion(success, execution_time)
+                
+                self.context_history.append(step_text)
+                self.response_history.append(result)
+                return result
         
         # Check for specific validation keywords that should always be handled as validation
         validation_keywords = [
@@ -465,25 +562,58 @@ class AIStepHandler:
         ]
         
         if any(keyword in step_text.lower() for keyword in validation_keywords):
-            result = self.handle_validation_step(step_text)
-            self.context_history.append(step_text)
-            self.response_history.append(result)
-            return result
+            with allure_logger.start_step(step_text, "Validation"):
+                result = self.handle_validation_step(step_text)
+                execution_time = time.time() - start_time
+                
+                allure_logger.log_ai_interaction(
+                    prompt=f"Validation step: {step_text}",
+                    output=str(result)
+                )
+                
+                success = result.get("status") != "error"
+                allure_logger.log_step_completion(success, execution_time)
+                
+                self.context_history.append(step_text)
+                self.response_history.append(result)
+                return result
         
         # Use tag-based routing to decide the action type
         action_type = self.decide_action_type(step_text)
         
         logging.info(f"Tag-based routing ({routing_mode}) → {action_type}: '{step_text}'")
         
-        # Route to the appropriate handler
-        if action_type == 'api':
-            result = self.run_api_instruction(step_text)
-        elif action_type == 'browser':
-            result = self.run_browser_instruction_handler(step_text)
-        else:
-            # Fallback to API for unknown classifications
-            logging.warning(f"Unknown action type '{action_type}', defaulting to API")
-            result = self.run_api_instruction(step_text)
+        # Start Allure step logging
+        with allure_logger.start_step(step_text, action_type.upper()):
+            try:
+                # Route to the appropriate handler
+                if action_type == 'api':
+                    result = self.run_api_instruction(step_text)
+                elif action_type == 'browser':
+                    result = self.run_browser_instruction_handler(step_text)
+                else:
+                    # Fallback to API for unknown classifications
+                    logging.warning(f"Unknown action type '{action_type}', defaulting to API")
+                    result = self.run_api_instruction(step_text)
+                
+                # Calculate execution time
+                execution_time = time.time() - start_time
+                
+                # Log completion
+                success = result.get("status") != "error"
+                allure_logger.log_step_completion(success, execution_time)
+                
+            except Exception as e:
+                execution_time = time.time() - start_time
+                allure_logger.log_error(e, f"Step execution failed: {step_text}")
+                allure_logger.log_step_completion(False, execution_time)
+                
+                result = {
+                    "status": "error",
+                    "action_type": action_type,
+                    "step_text": step_text,
+                    "error": str(e)
+                }
         
         # Store in history
         self.context_history.append(step_text)
@@ -623,6 +753,21 @@ class AIStepHandler:
         if isinstance(agent_response, dict) and 'tool_execution' in agent_response:
             return agent_response['tool_execution'].get('json_response')
         return None
+    
+    def _extract_headers(self, tool_execution: Dict) -> Dict:
+        """Extract headers from tool execution data"""
+        # Default headers for API calls
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+        
+        # Add authorization header if bearer token is present
+        bearer_token = tool_execution.get('bearer_token')
+        if bearer_token:
+            headers['Authorization'] = f'Bearer {bearer_token}'
+        
+        return headers
 
     def extract_jwt_token(self, response_data):
         """

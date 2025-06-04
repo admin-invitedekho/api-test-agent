@@ -1,8 +1,9 @@
 """
-Behave environment configuration with browser scenario management.
+Behave environment configuration with browser scenario management and Allure reporting.
 
 This module sets up the test environment with proper browser context
-management for each scenario, ensuring clean isolation between tests.
+management for each scenario, ensuring clean isolation between tests,
+and comprehensive Allure reporting integration.
 """
 
 import logging
@@ -20,6 +21,15 @@ except ImportError as e:
     logging.warning(f"Browser handler not available: {e}")
     BROWSER_HANDLER_AVAILABLE = False
 
+# Import AI step handler and Allure logger
+try:
+    from ai_step_handler import AIStepHandler
+    from allure_logger import allure_logger
+    AI_STEP_HANDLER_AVAILABLE = True
+except ImportError as e:
+    logging.warning(f"AI step handler not available: {e}")
+    AI_STEP_HANDLER_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -33,10 +43,16 @@ def before_all(context):
     Args:
         context: Behave context object
     """
-    logging.info("Starting test suite")
+    logging.info("Starting test suite with Allure reporting")
     
-    # Initialize any global test configuration here
+    # Initialize global test configuration
     context.browser_handler_available = BROWSER_HANDLER_AVAILABLE
+    context.ai_step_handler_available = AI_STEP_HANDLER_AVAILABLE
+    
+    # Initialize AI step handler
+    if AI_STEP_HANDLER_AVAILABLE:
+        context.step_handler = AIStepHandler()
+        logging.info("AIStepHandler initialized successfully")
     
     # Store scenario counter for unique IDs
     context.scenario_counter = 0
@@ -62,6 +78,34 @@ def before_scenario(context, scenario):
     
     logging.info(f"Starting scenario: {scenario.name} (ID: {scenario_id})")
     
+    # Initialize Allure logging for the scenario
+    if AI_STEP_HANDLER_AVAILABLE:
+        scenario_name = f"{scenario.feature.name}: {scenario.name}"
+        allure_logger.start_scenario(scenario_name)
+        
+        # Add scenario tags to Allure
+        try:
+            import allure
+            if scenario.tags:
+                for tag in scenario.tags:
+                    allure.dynamic.tag(tag)
+            
+            # Add feature and environment labels
+            allure.dynamic.feature(scenario.feature.name)
+            allure.dynamic.label("environment", "staging")
+            allure.dynamic.label("test_type", "automated")
+            
+        except ImportError:
+            logging.warning("Allure not available for dynamic labeling")
+        
+        # Reset step handler context for new scenario
+        if hasattr(context, 'step_handler'):
+            context.step_handler.context_history = []
+            context.step_handler.response_history = []
+            context.step_handler.jwt_token = None
+            context.step_handler.ui_data = {}
+            context.step_handler.api_data = {}
+    
     # Start fresh browser context for this scenario if browser handler is available
     if context.browser_handler_available:
         try:
@@ -82,6 +126,19 @@ def after_scenario(context, scenario):
     """
     scenario_id = getattr(context, 'current_scenario_id', 'unknown')
     logging.info(f"Completing scenario: {scenario.name} (ID: {scenario_id})")
+    
+    # Complete Allure scenario logging
+    if AI_STEP_HANDLER_AVAILABLE:
+        scenario_passed = scenario.status.name == 'passed'
+        allure_logger.complete_scenario(scenario_passed)
+        
+        # Clear AI step handler context for next scenario
+        if hasattr(context, 'step_handler'):
+            context.step_handler.context_history = []
+            context.step_handler.response_history = []
+            context.step_handler.jwt_token = None
+            context.step_handler.ui_data = {}
+            context.step_handler.api_data = {}
     
     # Clean up browser context for this scenario
     if context.browser_handler_available:
