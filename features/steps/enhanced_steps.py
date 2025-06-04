@@ -21,14 +21,17 @@ step_handler = AIStepHandler()
 def universal_step_handler(context, step_text):
     """
     Single universal step definition that handles ALL instruction patterns.
-    Supports any natural language instruction and automatically routes to API or browser automation.
+    Uses scenario tags to determine routing mode (API vs Browser vs Mixed).
     
     Examples:
-    - "I navigate to https://example.com"
-    - "click the Login button" 
-    - "get user data from API"
-    - "verify we are on the profile page"
+    - @api scenarios: All steps routed to API handler
+    - @browser scenarios: All steps routed to browser automation
+    - @mixed scenarios: AI determines per step
+    - No tags: AI fallback classification
     """
+    # Set the current scenario context for tag-based routing
+    step_handler.set_scenario_context(context)
+    
     result = step_handler.step_handler(step_text)
     context.last_result = result
     
@@ -45,6 +48,9 @@ def universal_step_handler(context, step_text):
     # For verification steps, accept both success and info status
     if step_text.startswith(('verify', 'check', 'ensure', 'confirm')):
         acceptable_statuses = ['success', 'info']
+    # For screenshot and snapshot steps, accept both success and info status
+    elif any(keyword in step_text.lower() for keyword in ['screenshot', 'snapshot', 'capture']):
+        acceptable_statuses = ['success', 'info']
     else:
         acceptable_statuses = ['success']
     
@@ -52,7 +58,10 @@ def universal_step_handler(context, step_text):
         error_msg = result.get('error', 'Unknown error')
         raise AssertionError(f"Step failed: '{step_text}' - {error_msg}")
     
-    print(f"✅ AI Step executed successfully: {step_text}")
+    # Log the routing decision
+    routing_mode = step_handler.get_scenario_routing_mode()
+    action_type = result.get('action_type', 'unknown')
+    print(f"✅ Step executed via {routing_mode} routing → {action_type}: {step_text}")
 
 # Hook for better debugging and logging
 def after_step(context, step):

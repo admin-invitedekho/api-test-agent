@@ -9,3 +9,5 @@ browser-use==0.2.5
 nest_asyncio
 playwright
 playwright-mcp
+aiohttp
+mcp

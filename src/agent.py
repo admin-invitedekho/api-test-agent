@@ -11,7 +11,7 @@ import os
 # Add the src directory to the Python path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
-from api_tools import get_api, post_api, put_api, delete_api
+from api_tools import get_api, post_api, put_api, delete_api, login_api
 
 from dotenv import load_dotenv
 
@@ -60,7 +60,7 @@ def get_llm():
 
 llm = get_llm()
 
-tools = [get_api, post_api, put_api, delete_api]
+tools = [get_api, post_api, put_api, delete_api, login_api]
 
 # Load the AI Agent Usage Guide
 def load_usage_guide():
@@ -107,84 +107,35 @@ usage_guide_content = load_usage_guide()
 api_contracts_content = load_api_contracts()
 
 # Create system message that includes the full usage guide and API contracts
-system_message = f"""You are an AI agent that executes BDD scenarios by interacting with APIs. 
+system_message = """You are an AI agent that executes BDD scenarios by interacting with APIs. 
 
-You have access to four tools:
-- get_api(endpoint, params=None) - for GET requests
-- post_api(endpoint, data) - for POST requests (data parameter is REQUIRED)
-- put_api(endpoint, data) - for PUT requests (data parameter is REQUIRED)  
-- delete_api(endpoint) - for DELETE requests
+You have access to five tools:
+- get_api(endpoint, params=None, bearer_token=None) - for GET requests (bearer_token is optional)
+- post_api(endpoint, data, bearer_token) - for POST requests (data and bearer_token are REQUIRED)
+- put_api(endpoint, data, bearer_token) - for PUT requests (data and bearer_token are REQUIRED)  
+- delete_api(endpoint, bearer_token) - for DELETE requests (bearer_token is REQUIRED)
+- login_api(endpoint, data) - for login/authentication requests (NO bearer_token required)
 
-CRITICAL TOOL USAGE RULES:
-1. For post_api and put_api: ALWAYS include both 'endpoint' AND 'data' parameters
-2. Extract data from step descriptions carefully (email, password, etc.)
-3. Use complete URLs from loaded contracts (e.g., https://api.stage.invitedekho.com/login)
-4. Execute the API call ONCE and provide a summary of the result
-5. Do NOT repeat the same API call multiple times
-6. If a request fails (404, etc.), report the error and stop
-7. Only use the available tools for API testing
+AUTOMATIC AUTHENTICATION DETECTION:
+- Automatically determine from API contracts which endpoints require authentication
+- Login endpoints (/login, /auth): Use login_api (no bearer token)
+- Protected endpoints (/user/me, /profile): Use appropriate tool WITH bearer_token
+- Public endpoints: Use tools WITHOUT bearer_token
+- If bearer_token is available from previous login, automatically include it for protected endpoints
 
-CRITICAL STEP TYPE RULES:
-- "Given" steps: Acknowledge setup, usually no API calls
-- "When" steps: Make API calls using tools (post_api, get_api, etc.)
-- "Then" and "And" steps: EXAMINE PREVIOUS RESPONSES - DO NOT make new API calls
-
-ASSERTION STEP HANDLING:
-For steps starting with "Then" or "And" (like "Then I should receive..." or "And the error should..."):
-- DO NOT call post_api, get_api, put_api, or delete_api
-- Instead, examine the LAST API call result from tool execution
-- Check status codes, response data, error messages from previous calls
-- Report whether the assertion passes or fails based on that data
-
-CRITICAL: If a step contains these phrases, DO NOT use any tools:
-- "should receive", "should contain", "should indicate", "should be", "should have"
-- "the response should", "the error should", "the token should"
-- "extract from the response", "verify", "check", "validate"
-Instead, analyze previous API responses and provide verification results.
-
-MANDATORY LOGIN OPERATIONS RULE:
-For ANY login-related steps, regardless of wording:
-- ANY step mentioning "login", "try to login", "attempt to login", "login with", "login to", etc.
-- ALWAYS use post_api (NEVER get_api, even for invalid credentials, malformed emails, or any error scenarios)
-- The login endpoint REQUIRES POST method as per API contracts - this is non-negotiable
-- ALWAYS extract email/username and password from step description
-- Format: post_api(endpoint="https://api.stage.invitedekho.com/login", data=dict(email="...", password="..."))
-- Even for malformed emails, empty fields, or SQL injection - always use POST method
-
-INPUT LENGTH PROTECTION:
-- If a step mentions "extremely long", "over 1000 characters", or similar
-- Truncate passwords to 50 characters to prevent token limit issues
-- Still test the API but with manageable input size
-- For extremely long content, use abbreviated test data to stay within context limits
-
-EXAMPLE LOGIN STEP HANDLING:
-Step: "When I try to login with correct email "admin@invitedekho.com" but wrong password "WrongPassword""
-CORRECT Tool Call:
-post_api(
-    endpoint="https://api.stage.invitedekho.com/login",
-    data=dict(
-        email="admin@invitedekho.com",
-        password="WrongPassword"
-    )
-)
-
-Step: "When I try to login with empty email and password fields"
-CORRECT Tool Call:
-post_api(
-    endpoint="https://api.stage.invitedekho.com/login",
-    data=dict(
-        email="",
-        password=""
-    )
-)
+CRITICAL RULES:
+- Extract data from step descriptions carefully (email, password, etc.)
+- Use complete URLs from loaded contracts
+- Execute API calls ONCE and provide summaries
+- For "Then"/"And" validation steps: EXAMINE PREVIOUS RESPONSES, do NOT make new API calls
 
 COMPLETE USAGE GUIDE AND INSTRUCTIONS:
-{usage_guide_content}
+""" + usage_guide_content + """
 
 API CONTRACTS AND SCHEMA DOCUMENTATION:
-{api_contracts_content}
+""" + api_contracts_content + """
 
-Follow the usage guide and API contracts documentation exactly for parsing step descriptions, understanding required parameters, headers, and executing API calls. Use the contracts to know what data is required for each endpoint and what response formats to expect."""
+Follow the usage guide and API contracts documentation exactly for parsing step descriptions, understanding required parameters, headers, and executing API calls."""
 
 # Create agent with tool calling support
 prompt = ChatPromptTemplate.from_messages([
@@ -403,10 +354,11 @@ class Agent:
         return f"""You are an intelligent API testing agent with comprehensive knowledge of API contracts and testing best practices.
 
 AVAILABLE API TOOLS:
-- get_api(endpoint, params=None) - for GET requests
-- post_api(endpoint, data) - for POST requests (data parameter is REQUIRED)
-- put_api(endpoint, data) - for PUT requests (data parameter is REQUIRED)  
-- delete_api(endpoint) - for DELETE requests
+- get_api(endpoint, params=None, bearer_token=None) - for GET requests (bearer_token is optional)
+- post_api(endpoint, data, bearer_token) - for POST requests (data and bearer_token are REQUIRED)
+- put_api(endpoint, data, bearer_token) - for PUT requests (data and bearer_token are REQUIRED)  
+- delete_api(endpoint, bearer_token) - for DELETE requests (bearer_token is REQUIRED)
+- login_api(endpoint, data) - for login/authentication requests (NO bearer_token required)
 
 CRITICAL INSTRUCTIONS:
 1. For validation requests, analyze the data against API contracts

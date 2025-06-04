@@ -54,12 +54,18 @@ def before_scenario(context, scenario):
     scenario_id = f"scenario_{context.scenario_counter}_{scenario.name.replace(' ', '_').lower()}"
     context.current_scenario_id = scenario_id
     
+    # Extract feature name from scenario.feature.filename
+    feature_name = "unknown_feature"
+    if hasattr(scenario, 'feature') and hasattr(scenario.feature, 'filename'):
+        feature_filename = os.path.basename(scenario.feature.filename)
+        feature_name = os.path.splitext(feature_filename)[0]  # Remove .feature extension
+    
     logging.info(f"Starting scenario: {scenario.name} (ID: {scenario_id})")
     
     # Start fresh browser context for this scenario if browser handler is available
     if context.browser_handler_available:
         try:
-            start_browser_scenario(scenario_id)
+            start_browser_scenario(scenario_id, feature_name, scenario.name)
             logging.info(f"Fresh browser context created for scenario: {scenario_id}")
         except Exception as e:
             logging.error(f"Failed to start browser context for scenario {scenario_id}: {e}")
